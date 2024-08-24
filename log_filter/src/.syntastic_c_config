@@ -1,0 +1,6 @@
+-std=gnu11
+-I../include
+-D_GNU_SOURCE
+-D_FILE_OFFSET_BITS=64
+-D_LARGEFILE64_SOURCE
+
