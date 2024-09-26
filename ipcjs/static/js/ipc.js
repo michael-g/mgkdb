@@ -17,6 +17,9 @@ MgKdb.chk_is_integer = function(val) {
 MgKdb.chk_is_bigint = function(val) {
   if (val === undefined || val === null) return null
   if (!(typeof(val) === 'bigint' || Number.isInteger(val))) throw new TypeError("'type")
+  if (-9223372036854775808n === val) return null
+  if (9223372036854775807n === val) return Number.POSITIVE_INFINITY
+  if (-9223372036854775807n === val) return Number.NEGATIVE_INFINITY
   return val
 }
 
@@ -132,7 +135,7 @@ class KdbType {
 class KdbAtom extends KdbType {
   constructor(typ, val) {
     super(typ)
-    this.value = val
+    this.val = val
   }
 }
 
@@ -140,6 +143,7 @@ class KdbBoolAtom extends KdbAtom {
   constructor(val) {
     super(-1, !!val)
   }
+  toString = () => this.val ? '1b' : '0b'
 }
 
 class KdbGuidAtom extends KdbAtom {
@@ -150,7 +154,12 @@ class KdbGuidAtom extends KdbAtom {
 
 class KdbByteAtom extends KdbAtom {
   constructor(val) {
-    super(-4, MgKdb.chk_is_bounded_int(val, -128, 127))
+    super(-4, MgKdb.chk_is_bounded_int(val, 0, 255))
+  }
+  toString = () => {
+    const hex = this.val.toString(16)
+    if (hex.length === 1) return `0x0${hex}`
+    return `0x${hex}`
   }
 }
 
@@ -158,17 +167,38 @@ class KdbShortAtom extends KdbAtom {
   constructor(val) {
     super(-5, MgKdb.chk_is_bounded_int(val, -32768, 32767))
   }
+  toString = () => {
+    if (null === this.val) {
+      return '0Nh'
+    }
+    return `${this.val}h`
+  }
 }
 
 class KdbIntAtom extends KdbAtom {
   constructor(val) {
     super(-6, MgKdb.chk_is_bounded_int(val, -2147483648, 2147483647))
   }
+  toString = () => {
+    if (this.val === null) {
+      return '0Ni'
+    }
+    // TODO infinities
+    return `${this.val}i`
+  }
 }
 
 class KdbLongAtom extends KdbAtom {
   constructor(val) {
+    // Possibly introducing a latent issue using "not just bigint" values, but
+    // Number.{+/-}VE_INFINITY as well, which won't add well etc
     super(-7, MgKdb.chk_is_bigint(val))
+  }
+  toString = () => {
+    if (null === this.val) return '0N'
+    if (Number.POSITIVE_INFINITY === this.val) return '0W'
+    if (Number.NEGATIVE_INFINITY === this.val) return '-0W'
+    return this.val.toString()
   }
 }
 
@@ -176,11 +206,21 @@ class KdbRealAtom extends KdbAtom {
   constructor(val) {
     super(-8, MgKdb.chk_is_float(val)) 
   }
+  toString = () => {
+    if (isNaN(this.val)) return '0Ne'
+    // TODO infinities
+    return `${this.val}e`
+  }
 }
 
 class KdbFloatAtom extends KdbAtom {
   constructor(val) {
     super(-9, val) 
+  }
+  toString = () => {
+    if (isNaN(this.val)) return '0Nf'
+    // TODO infinities
+    return `${this.val}f`
   }
 }
 
@@ -188,11 +228,18 @@ class KdbCharAtom extends KdbAtom {
   constructor(val) {
     super(-10, String.fromCharCode(MgKdb.chk_is_bounded_int(val, -128, 127)))
   }
+  toString = () => `"${this.val}"`
 }
 
 class KdbSymbolAtom extends KdbAtom {
   constructor(val) {
     super(-11, MgKdb.chk_is_string(val))
+  }
+  toString = () => {
+    if (-1 !== this.val.indexOf(' ')) {
+      return `(\`$"${this.val}")`
+    }
+    return '`' + this.val
   }
 }
 
@@ -212,6 +259,7 @@ class KdbDateAtom extends KdbAtom {
   constructor(val) {
     super(-14, MgKdb.chk_is_integer(val))
   }
+  toString = () => KdbTimeUtil.Date.toString(this.val, true)
 }
 
 class KdbDateTimeAtom extends KdbAtom {
@@ -230,18 +278,21 @@ class KdbMinuteAtom extends KdbAtom {
   constructor(val) {
     super(-17, MgKdb.chk_is_integer(val))
   }
+  toString = () => KdbTimeUtil.Minute.toString(this.val, true)
 }
 
 class KdbSecondAtom extends KdbAtom {
   constructor(val) {
     super(-18, MgKdb.chk_is_integer(val))
   }
+  toString = () => KdbTimeUtil.Second.toString(this.val, true)
 }
 
 class KdbTimeAtom extends KdbAtom {
   constructor(val) {
     super(-19, MgKdb.chk_is_integer(val))
   }
+  toString = () => KdbTimeUtil.Time.toString(this.val, true)
 }
 
 class KdbList extends KdbType {
@@ -249,6 +300,9 @@ class KdbList extends KdbType {
     super(0)
     this.att = att
     this.ary = ary
+  }
+  toString = () => {
+    return '(' + this.ary.map(elm => elm.toString()).join(';') + ')'
   }
 }
 
@@ -300,6 +354,16 @@ class KdbFloatVector extends KdbVector {
   constructor(att, ary) {
     super(9, att, ary)
   }
+  toString = () => {
+    if (this.ary.length === 0) {
+      return '(0#0Nf)'
+    }
+    const elm = new Array(this.ary.length)
+    for (let i = 0 ; i < elm.length ; i++) {
+      elm[i] = isNaN(this.ary[i]) ? '0N' : this.ary[i] // Infinities ...
+    }
+    return elm.join(' ') + 'f'
+  }
 }
 
 class KdbCharVector extends KdbVector {
@@ -313,6 +377,7 @@ class KdbCharVector extends KdbVector {
     }
     return this.string
   }
+  toString = () => `"${this.asString()}"`
 }
 
 class KdbSymbolVector extends KdbVector {
@@ -416,7 +481,7 @@ class KdbDict extends KdbType {
     this.vals = vals
   }
   toString = () => {
-    return `(${this.cols}!${this.vals})`
+    return `(${this.keys}!${this.vals})`
   }
 }
 
@@ -589,8 +654,8 @@ class _KdbMessage {
     }
     return ary
   }
-  readBoolAtom = () => new KdbBoolAtom(0 !== this.i8y[this.pos]++)
-  readByteAtom = () => new KdbByteAtom(this.i8y[this.pos]++)
+  readBoolAtom = () => new KdbBoolAtom(0 !== this.i8y[this.pos++])
+  readByteAtom = () => new KdbByteAtom(this.u8y[this.pos++])
   readShortAtom = () => {
     let val = this.readI16()
     // TODO NaN etc
