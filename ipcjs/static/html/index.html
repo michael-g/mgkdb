@@ -1,0 +1,19 @@
+<html>
+<head>
+  <script type="text/javascript">
+    const MgCtx = {}
+    MgCtx.onConnected = function(conn) {
+      console.info("Connection reported as open")
+    }
+
+    function ipcReady() {
+      const conn = new MgKdb.Connection('ws://localhost:30098', MgCtx.onConnected)
+      console.debug("DEBUG: created %s", conn.constructor.name)
+      MgCtx.conn = conn
+    }
+  </script>
+  <script type="text/javascript" src="/js/ipc.js" onload="ipcReady()"></script>
+</head>
+<body>
+</body>
+</html>
