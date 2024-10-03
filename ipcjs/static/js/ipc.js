@@ -73,6 +73,13 @@ const KdbConstants = {
   },
 }
 
+const MgFormat = {
+  NUM_FMT_2D: new Intl.NumberFormat('en-GB', {minimumIntegerDigits: 2,}),
+  NUM_FMT_3D: new Intl.NumberFormat('en-GB', {minimumIntegerDigits: 3,}),
+  NUM_FMT_4D: new Intl.NumberFormat('en-GB', {minimumIntegerDigits: 3, useGrouping: false }),
+  NUM_FMT_9D: new Intl.NumberFormat('en-GB', {minimumIntegerDigits: 9, useGrouping: false }),
+}
+
 const KdbTimeUtil = {
 
   NANOS_IN_DAY: 86400000000000n,
@@ -89,10 +96,6 @@ const KdbTimeUtil = {
   DAYS_SINCE_EPOCH: 10957,
   MILLIS_SINCE_EPOCH: 10957 * 24 * 60 * 60 * 1000,
 
-  NUM_FMT_2D: new Intl.NumberFormat('en-GB', {minimumIntegerDigits: 2,}),
-  NUM_FMT_3D: new Intl.NumberFormat('en-GB', {minimumIntegerDigits: 3,}),
-  NUM_FMT_4D: new Intl.NumberFormat('en-GB', {minimumIntegerDigits: 3, useGrouping: false }),
-  NUM_FMT_9D: new Intl.NumberFormat('en-GB', {minimumIntegerDigits: 9, useGrouping: false }),
 
   Timestamp: {
     toTimeComponent: function(nanos) {
@@ -102,8 +105,8 @@ const KdbTimeUtil = {
       const s = (nanos % KdbTimeUtil.NANOS_IN_MINUTE) / KdbTimeUtil.NANOS_IN_SECOND
       const n = nanos % KdbTimeUtil.NANOS_IN_SECOND;
 
-      const F2 = KdbTimeUtil.NUM_FMT_2D
-      const F9 = KdbTimeUtil.NUM_FMT_9D
+      const F2 = MgFormat.NUM_FMT_2D
+      const F9 = MgFormat.NUM_FMT_9D
       return `${F2.format(h)}:${F2.format(m)}:${F2.format(s)}.${F9.format(n)}`
     },
     toDateComponent: function(nanos) {
@@ -111,7 +114,7 @@ const KdbTimeUtil = {
       return KdbTimeUtil.Date.toString(days)
     },
     toString: function(nanos, suffix) {
-      const nil = MgKdb.int_to_0N_str(nanos, KdbConstants.i64, 'p')
+      const nil = MgKdb.int_to_0N_str(nanos, KdbConstants.i64, suffix ? 'p' : '')
       if (nil) return nil
       const date = KdbTimeUtil.Timestamp.toDateComponent(nanos)
       const time = KdbTimeUtil.Timestamp.toTimeComponent(nanos)
@@ -121,13 +124,20 @@ const KdbTimeUtil = {
 
   Month: {
     toString: function(months, suffix) {
-      throw Error("'nyi")
+      const nil = MgKdb.int_to_0N_str(months, KdbConstants.i32, suffix ? 'm' : '')
+      if (nil) return nil
+
+      const F4 = MgFormat.NUM_FMT_4D
+      const F2 = MgFormat.NUM_FMT_2D
+      const yrs = 2000 + Math.floor(months / 12)
+      const mth = 1 + months % 12
+      return `${F4.format(yrs)}.${F2.format(mth)}${suffix ? 'm' : ''}`
     }
   },
 
   Date: {
     toString: function(date, suffix) {
-      const nil = MgKdb.int_to_0N_str(date, KdbConstants.i32, 'd')
+      const nil = MgKdb.int_to_0N_str(date, KdbConstants.i32, suffix ? 'd' : '')
       if (nil) return nil
       // C.f. http://web.archive.org/web/20170507133619/https://alcor.concordia.ca/~gpkatch/gdate-algorithm.html
 
@@ -144,8 +154,8 @@ const KdbTimeUtil = {
       y = y + Math.floor((mi + 2) / 12)
       dd = ddd - Math.floor((mi * 306 + 5) / 10) + 1
 
-      const F4 = KdbTimeUtil.NUM_FMT_4D
-      const F2 = KdbTimeUtil.NUM_FMT_2D
+      const F4 = MgFormat.NUM_FMT_4D
+      const F2 = MgFormat.NUM_FMT_2D
 
       return `${F4.format(y)}.${F2.format(mm)}.${F2.format(dd)}`
     }
@@ -166,8 +176,8 @@ const KdbTimeUtil = {
       s = (nanos % KdbTimeUtil.NANOS_IN_MINUTE) / KdbTimeUtil.NANOS_IN_SECOND
       n = nanos % KdbTimeUtil.NANOS_IN_SECOND;
 
-      const F2 = KdbTimeUtil.NUM_FMT_2D
-      const F9 = KdbTimeUtil.NUM_FMT_9D
+      const F2 = MgFormat.NUM_FMT_2D
+      const F9 = MgFormat.NUM_FMT_9D
       return `${d}D${F2.format(h)}:${F2.format(m)}:${F2.format(s)}.${F9.format(n)}`
     }
   },
@@ -178,7 +188,7 @@ const KdbTimeUtil = {
       if (nil) return nil
       const hours = Math.floor(mins / 60)
       mins = mins % 60
-      const F2 = KdbTimeUtil.NUM_FMT_2D
+      const F2 = MgFormat.NUM_FMT_2D
       return `${F2.format(hours)}:${F2.format(mins)}` 
     }
   },
@@ -191,7 +201,7 @@ const KdbTimeUtil = {
       secs -= hours * 3600;
       const mins = Math.floor(secs / 60);
       secs -= mins * 60;
-      const F2 = KdbTimeUtil.NUM_FMT_2D
+      const F2 = MgFormat.NUM_FMT_2D
       return `${F2.format(hours)}:${F2.format(mins)}:${F2.format(secs)}`
     }
   },
@@ -206,8 +216,8 @@ const KdbTimeUtil = {
       time -= mins * KdbTimeUtil.MILLIS_IN_MINUTE
       const secs = Math.floor(time / KdbTimeUtil.MILLIS_IN_SECOND)
       time -= secs * KdbTimeUtil.MILLIS_IN_SECOND
-      const F2 = KdbTimeUtil.NUM_FMT_2D
-      const F3 = KdbTimeUtil.NUM_FMT_3D
+      const F2 = MgFormat.NUM_FMT_2D
+      const F3 = MgFormat.NUM_FMT_3D
       return `${F2.format(hours)}:${F2.format(mins)}:${F2.format(secs)}.${F3.format(time)}`
     }
   }
@@ -215,7 +225,7 @@ const KdbTimeUtil = {
 
 
 class KdbType {
-  constructor(typ, val) {
+  constructor(typ, val) {      const days = 
     this.typ = typ
   }
 }
@@ -244,13 +254,15 @@ class KdbGuidAtom extends KdbAtom {
 }
 
 class KdbByteAtom extends KdbAtom {
+  static toHexDigits = function(val) {
+    const hex = val.toString(16)
+    return hex.length === 2 ? hex : `0${hex}`
+  }
   constructor(val) {
     super(-4, MgKdb.chk_is_int8(val))
   }
   toString = () => {
-    const hex = this.val.toString(16)
-    if (hex.length === 1) return `0x0${hex}`
-    return `0x${hex}`
+    return `0x${KdbByteAtom.toHexDigits(this.val)}`
   }
 }
 
@@ -276,13 +288,11 @@ class KdbIntAtom extends KdbAtom {
 
 class KdbLongAtom extends KdbAtom {
   constructor(val) {
-    // Possibly introducing a latent issue using "not just bigint" values, but
-    // Number.{+/-}VE_INFINITY as well, which won't add well etc
     super(-7, MgKdb.chk_is_bigint(val))
   }
   toString = () => {
-    const nil = MgKdb.int_to_0N_str(this.val, KdbConstants.i64, 'j')
-    return `${this.val.toString()}j`
+    const nil = MgKdb.int_to_0N_str(this.val, KdbConstants.i64, '')
+    return nil ? nil : `${this.val.toString()}j`
   }
 }
 
@@ -329,66 +339,56 @@ class KdbTimestampAtom extends KdbAtom {
   constructor(val) {
     super(-12, MgKdb.chk_is_bigint(val))
   }
-  toString = () => {
-    return KdbTimeUtil.Timestamp.toString(this.val, true)
-  }
+  toString = () => KdbTimeUtil.Timestamp.toString(this.val, true)
 }
 
 class KdbMonthAtom extends KdbAtom {
   constructor(val) {
     super(-13, MgKdb.chk_is_int32(val))
   }
-  toString = () => {
-    return KdbTimeUtil.Month.toString(this.val, true)
-  }
+  toString = () => KdbTimeUtil.Month.toString(this.val, true)
 }
 
 class KdbDateAtom extends KdbAtom {
   constructor(val) {
     super(-14, MgKdb.chk_is_int32(val))
   }
-  toString = () => {
-    return KdbTimeUtil.Date.toString(this.val, true)
-  }
+  toString = () => KdbTimeUtil.Date.toString(this.val, true)
 }
 
 class KdbDateTimeAtom extends KdbAtom {
   constructor(val) {
     super(-15, MgKdb.chk_is_float(val))
   }
+  toString = () => "'nyi"
 }
 
 class KdbTimespanAtom extends KdbAtom {
   constructor(val) {
     super(-16, MgKdb.chk_is_bigint(val))
   }
+  toString = () => KdbTimeUtil.Timespan.toString(this.val, true)
 }
 
 class KdbMinuteAtom extends KdbAtom {
   constructor(val) {
     super(-17, MgKdb.chk_is_int32(val))
   }
-  toString = () => {
-    return KdbTimeUtil.Minute.toString(this.val, true)
-  }
+  toString = () => KdbTimeUtil.Minute.toString(this.val, true)
 }
 
 class KdbSecondAtom extends KdbAtom {
   constructor(val) {
     super(-18, MgKdb.chk_is_int32(val))
   }
-  toString = () => {
-    return KdbTimeUtil.Second.toString(this.val, true)
-  }
+  toString = () => KdbTimeUtil.Second.toString(this.val, true)
 }
 
 class KdbTimeAtom extends KdbAtom {
   constructor(val) {
     super(-19, MgKdb.chk_is_int32(val))
   }
-  toString = () => {
-    return KdbTimeUtil.Time.toString(this.val, true)
-  }
+  toString = () => KdbTimeUtil.Time.toString(this.val, true)
 }
 
 class KdbList extends KdbType {
@@ -414,11 +414,25 @@ class KdbBoolVector extends KdbVector {
   constructor(att, ary) {
     super(1, att, ary)
   }
+  toString = () => {
+    if (this.ary.length === 0) return '(1h$())'
+    if (this.ary.length === 1) return `(enlist ${this.ary[0]}b)`
+    return this.ary.join('') + 'b'
+  }
 }
 
 class KdbByteVector extends KdbVector {
   constructor(att, ary) {
     super(4, att, ary)
+  }
+  toString = () => {
+    if (this.ary.length === 0) return '(4h$())'
+    if (this.ary.length === 1) return `(enlist 0x${KdbByteAtom.toHexDigits(this.ary[0])})`
+    const elm = []
+    for (let i = 0 ; i < this.ary.length ; i++) {
+      elm.push(KdbByteAtom.toHexDigits(this.ary[i]))
+    }
+    return `0x${elm.join('')}`
   }
 }
 
@@ -426,11 +440,31 @@ class KdbShortVector extends KdbVector {
   constructor(att, ary) {
     super(5, att, ary)
   }
+  toString = () => {
+    if (this.ary.length === 0) return '(5h$())'
+    if (this.ary.length === 1) return `(enlist ${this.ary[0]}h)`
+    const elm = new Array(this.ary.length)
+    for (let i = 0 ; i < this.ary.length ; i++) {
+      const nil = MgKdb.int_to_0N_str(this.ary[i], KdbConstants.i16, '')
+      elm[i] = null !== nil ? nil : this.ary[i]
+    }
+    return elm.join(' ') + 'h'
+  }
 }
 
 class KdbIntVector extends KdbVector {
   constructor(att, ary) {
     super(6, att, ary)
+  }
+  toString = () => {
+    if (this.ary.length === 0) return '(6h$())'
+    if (this.ary.length === 1) return `(enlist ${this.ary[0]}i)`
+    const elm = new Array(this.ary.length)
+    for (let i = 0 ; i < this.ary.length ; i++) {
+      const nil = MgKdb.int_to_0N_str(this.ary[i], KdbConstants.i32, '')
+      elm[i] = null !== nil ? nil : this.ary[i]
+    }
+    return elm.join(' ') + 'i'
   }
 }
 
@@ -438,11 +472,31 @@ class KdbLongVector extends KdbVector {
   constructor(att, ary) {
     super(7, att, ary) // TODO check tpe is BigInt64Array
   }
+  toString = () => {
+    if (this.ary.length === 0) return '(7h$())'
+    if (this.ary.length === 1) return `(enlist ${this.ary[0]}j)`
+    const elm = new Array(this.ary.length)
+    for (let i = 0 ; i < this.ary.length ; i++) {
+      const nil = MgKdb.int_to_0N_str(this.ary[i], KdbConstants.i64, '')
+      elm[i] = null !== nil ? nil : this.ary[i]
+    }
+    return elm.join(' ') + 'j'
+  }
 }
 
 class KdbRealVector extends KdbVector {
   constructor(att, ary) {
     super(8, att, ary)
+  }
+  toString = () => {
+    if (this.ary.length === 0) return '(8h$())'
+    if (this.ary.length === 1) return `(enlist ${this.ary[0]}e)`
+    const elm = new Array(this.ary.length)
+    for (let i = 0 ; i < this.ary.length ; i++) {
+      const nil = MgKdb.fp_to_0N_str(this.ary[i], '')
+      elm[i] = null !== nil ? nil : this.ary[i]
+    }
+    return elm.join(' ') + 'e'
   }
 }
 
@@ -451,12 +505,12 @@ class KdbFloatVector extends KdbVector {
     super(9, att, ary)
   }
   toString = () => {
-    if (this.ary.length === 0) {
-      return '(0#0Nf)'
-    }
+    if (this.ary.length === 0) return '(9h$())'
+    if (this.ary.length === 1) return `(enlist ${this.ary[0]}f)`
     const elm = new Array(this.ary.length)
-    for (let i = 0 ; i < elm.length ; i++) {
-      elm[i] = isNaN(this.ary[i]) ? '0N' : this.ary[i] // Infinities ...
+    for (let i = 0 ; i < this.ary.length ; i++) {
+      const nil = MgKdb.fp_to_0N_str(this.ary[i], '')
+      elm[i] = null !== nil ? nil : this.ary[i]
     }
     return elm.join(' ') + 'f'
   }
@@ -480,17 +534,51 @@ class KdbSymbolVector extends KdbVector {
   constructor(att, ary) {
     super(11, att, ary)
   }
+  toString = () => {
+    if (this.ary.length === 0) return '(`$())'
+    if (this.ary.length === 1) return `(enlist \`$"${this.ary[0]}")`
+    let any = false
+    for (let i = 0 ; !any && i < this.ary.length ; i++) {
+      any |= this.ary[i].indexOf(' ') !== -1
+    }
+    if (any) {
+      return '(`$("' + this.ary.join('";"') + '"))'
+    }
+    return '`' + this.ary.join('`')
+  }
 }
 
 class KdbTimestampVector extends KdbVector {
   constructor(att, ary) {
     super(12, att, ary)
   }
+  toString = () => {
+    if (this.ary.length === 0) return '(12h$())'
+    if (this.ary.length === 1) return `(enlist ${KdbTimeUtil.Timestamp.toString(this.ary[0], true)})`
+    const elm = new Array(this.ary.length)
+    let all = true
+    for (let i = 0 ; i < this.ary.length ; i++) {
+      const sfx = all && i == this.ary.length - 1
+      elm[i] = KdbTimeUtil.Timestamp.toString(this.ary[i], sfx)
+      all &= elm[i].length <= 3
+    }
+    return elm.join(' ')
+  }
 }
 
 class KdbMonthVector extends KdbVector {
   constructor(att, ary) {
     super(13, att, ary)
+  }
+  toString = () => {
+    if (this.ary.length === 0) return '(13h$())'
+    if (this.ary.length === 1) return `(enlist ${KdbTimeUtil.Month.toString(this.ary[0], true)})`
+    const elm = new Array(this.ary.length)
+    for (let i = 0 ; i < this.ary.length ; i++) {
+      const sfx = i == this.ary.length - 1
+      elm[i] = KdbTimeUtil.Month.toString(this.ary[i], sfx)
+    }
+    return elm.join(' ')
   }
 }
 
@@ -500,10 +588,13 @@ class KdbDateVector extends KdbVector {
   }
   toString = () => {
     if (this.ary.length === 0) return '(14h$())'
+    if (this.ary.length === 1) return `(enlist ${KdbTimeUtil.Date.toString(this.ary[0], true)})`
     const elm = new Array(this.ary.length)
-    let nil = false
+    let all = true
     for (let i = 0 ; i < elm.length ; i++) {
-      nil = '0N' === (elm[i] = KdbTimeUtil.Date.toString(this.ary[i], (i === elm.length - 1) && nil))
+      const sfx = all && i == this.ary.length - 1
+      elm[i] = KdbTimeUtil.Date.toString(this.ary[i], sfx)
+      all &= elm[i].length <= 3
     }
     return elm.join(' ')
   }
@@ -515,9 +606,10 @@ class KdbDateTimeVector extends KdbVector {
   }
   toString = () => {
     if (this.ary.length === 0) return '(15h$())'
+    if (this.ary.length === 1) return "(enlist 'nyi)"
     const elm = new Array(this.ary.length)
     for (let i = 0 ; i < elm.length ; i++) {
-      elm[i] = 'NaN' // TODO ... left as an exercise for the reader?
+      elm[i] = "'nyi"
     }
     return elm.join(' ')
   }
@@ -529,16 +621,16 @@ class KdbTimespanVector extends KdbVector {
     super(16, att, ary)
   }
   toString = () => {
-    if (this.ary.length === 0) {
-      return '(16h$())'
-    }
+    if (this.ary.length === 0) return '(16h$())'
+    if (this.ary.length === 1) return `(enlist ${KdbTimeUtil.Timespan.toString(this.ary[0], true)})`
     const elm = new Array(this.ary.length)
-    let nil = true
+    let all = true
     for (let i = 0 ; i < elm.length ; i++) {
-      nil = '0N' === (elm[i] = KdbTimeUtil.Timespan.toString(this.ary[i]))
+      const sfx = all && i == this.ary.length - 1
+      elm[i] = KdbTimeUtil.Timespan.toString(this.ary[i], sfx)
+      all &= elm[i].length <= 3
     }
-    const str = elm.join(' ')
-    return nil ? str + 'n' : str
+    return elm.join(' ')
   }
 }
 
@@ -548,13 +640,13 @@ class KdbMinuteVector extends KdbVector {
   }
   toString = () => {
     if (this.ary.length === 0) return '(17h$())'
-    if (this.ary.length === 1) {
-      return `((),${KdbTimeUtil.Minute.toString(this.ary[0], true)})`
-    }
+    if (this.ary.length === 1) return `(enlist ${KdbTimeUtil.Minute.toString(this.ary[0], true)})`
     const elm = new Array(this.ary.length)
-    let nil = false
+    let all = true
     for (let i = 0 ; i < elm.length ; i++) {
-      elm[i] = KdbTimeUtil.Minute.toString(this.ary[i])
+      const sfx = all && i == this.ary.length - 1
+      elm[i] = KdbTimeUtil.Minute.toString(this.ary[i], sfx)
+      all &= elm[i].length <= 3
     }
     return elm.join(' ')
   }
@@ -566,12 +658,13 @@ class KdbSecondVector extends KdbVector {
   }
   toString = () => {
     if (this.ary.length === 0) return '(18h$())'
-    if (this.ary.length === 1) {
-      return `((),${KdbTimeUtil.Second.toString(this.ary[0], true)})`
-    }
+    if (this.ary.length === 1) return `(enlist ${KdbTimeUtil.Second.toString(this.ary[0], true)})`
     const elm = new Array(this.ary.length)
+    let all = true
     for (let i = 0 ; i < elm.length ; i++) {
-      elm[i] = KdbTimeUtil.Second.toString(this.ary[i])
+      const sfx = all && i == this.ary.length - 1
+      elm[i] = KdbTimeUtil.Second.toString(this.ary[i], sfx)
+      all &= elm[i].length <= 3
     }
     return elm.join(' ')
   }
@@ -582,9 +675,14 @@ class KdbTimeVector extends KdbVector {
     super(19, att, ary)
   }
   toString = () => {
+    if (this.ary.length === 0) return '(19h$())'
+    if (this.ary.length === 1) return `(enlist ${KdbTimeUtil.Time.toString(this.ary[0], true)})`
     const elm = new Array(this.ary.length)
+    let all = true
     for (let i = 0 ; i < elm.length ; i++) {
-      elm[i] = KdbTimeUtil.Time.toString(this.ary[i])
+      const sfx = all && i == this.ary.length - 1
+      elm[i] = KdbTimeUtil.Time.toString(this.ary[i], sfx)
+      all &= elm[i].length <= 3
     }
     return elm.join(' ')
   }
@@ -597,9 +695,7 @@ class KdbTable extends KdbType {
     this.cols = cols
     this.vals = vals
   }
-  toString = () => {
-    return `(flip${this.cols}!${this.vals})`
-  }
+  toString = () => `(flip${this.cols}!${this.vals})`
 }
 
 class KdbDict extends KdbType {
@@ -608,9 +704,7 @@ class KdbDict extends KdbType {
     this.keys = keys
     this.vals = vals
   }
-  toString = () => {
-    return `(${this.keys}!${this.vals})`
-  }
+  toString = () => `(${this.keys}!${this.vals})`
 }
 
 class KdbFunction extends KdbType {
@@ -919,7 +1013,7 @@ class _KdbMessage {
     const len = this.readI32()
     const off = this.pos
     this.pos += len
-    return new KdbByteVector(att, this.i8y.slice(off, off + len))
+    return new KdbByteVector(att, this.u8y.slice(off, off + len))
   }
   readShortVector = () => {
     const att = this.i8y[this.pos++]
