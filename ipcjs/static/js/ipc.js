@@ -397,6 +397,11 @@ class KdbList extends KdbType {
     this.att = att
     this.ary = ary
   }
+
+  count = () => this.ary.length
+
+  getObjectAt = idx => this.ary[idx]
+
   toString = () => {
     return '(' + this.ary.map(elm => elm.toString()).join(';') + ')'
   }
@@ -408,12 +413,16 @@ class KdbVector extends KdbType {
     this.att = att
     this.ary = ary
   }
+  count = () => this.ary.length
 }
 
 class KdbBoolVector extends KdbVector {
   constructor(att, ary) {
     super(1, att, ary)
   }
+
+  getObjectAt = idx => new KdbBoolAtom(this.ary[idx])
+  
   toString = () => {
     if (this.ary.length === 0) return '(1h$())'
     if (this.ary.length === 1) return `(enlist ${this.ary[0]}b)`
@@ -425,6 +434,9 @@ class KdbByteVector extends KdbVector {
   constructor(att, ary) {
     super(4, att, ary)
   }
+
+  getObjectAt = idx => new KdbByteAtom(this.ary[idx])
+
   toString = () => {
     if (this.ary.length === 0) return '(4h$())'
     if (this.ary.length === 1) return `(enlist 0x${KdbByteAtom.toHexDigits(this.ary[0])})`
@@ -440,6 +452,9 @@ class KdbShortVector extends KdbVector {
   constructor(att, ary) {
     super(5, att, ary)
   }
+
+  getObjectAt = idx => new KdbShortAtom(this.ary[idx])
+
   toString = () => {
     if (this.ary.length === 0) return '(5h$())'
     if (this.ary.length === 1) return `(enlist ${this.ary[0]}h)`
@@ -456,6 +471,9 @@ class KdbIntVector extends KdbVector {
   constructor(att, ary) {
     super(6, att, ary)
   }
+
+  getObjectAt = idx => new KdbIntAtom(this.ary[idx])
+
   toString = () => {
     if (this.ary.length === 0) return '(6h$())'
     if (this.ary.length === 1) return `(enlist ${this.ary[0]}i)`
@@ -472,6 +490,9 @@ class KdbLongVector extends KdbVector {
   constructor(att, ary) {
     super(7, att, ary) // TODO check tpe is BigInt64Array
   }
+
+  getObjectAt = idx => new KdbLongAtom(this.ary[idx])
+
   toString = () => {
     if (this.ary.length === 0) return '(7h$())'
     if (this.ary.length === 1) return `(enlist ${this.ary[0]}j)`
@@ -488,6 +509,9 @@ class KdbRealVector extends KdbVector {
   constructor(att, ary) {
     super(8, att, ary)
   }
+
+  getObjectAt = idx => new KdbRealAtom(this.ary[idx])
+
   toString = () => {
     if (this.ary.length === 0) return '(8h$())'
     if (this.ary.length === 1) return `(enlist ${this.ary[0]}e)`
@@ -504,6 +528,9 @@ class KdbFloatVector extends KdbVector {
   constructor(att, ary) {
     super(9, att, ary)
   }
+
+  getObjectAt = idx => new KdbFloatAtom(this.ary[idx])
+
   toString = () => {
     if (this.ary.length === 0) return '(9h$())'
     if (this.ary.length === 1) return `(enlist ${this.ary[0]}f)`
@@ -521,6 +548,9 @@ class KdbCharVector extends KdbVector {
     super(10, att, ary)
     this.string = null
   }
+
+  getObjectAt = idx => new KdbCharAtom(this.ary[idx])
+
   asString = () => {
     if (this.string === null) {
       this.string = CdotJS.u16u8(this.ary)
@@ -534,6 +564,9 @@ class KdbSymbolVector extends KdbVector {
   constructor(att, ary) {
     super(11, att, ary)
   }
+
+  getObjectAt = idx => new KdbSymbolAtom(this.ary[idx])
+
   toString = () => {
     if (this.ary.length === 0) return '(`$())'
     if (this.ary.length === 1) return `(enlist \`$"${this.ary[0]}")`
@@ -552,6 +585,9 @@ class KdbTimestampVector extends KdbVector {
   constructor(att, ary) {
     super(12, att, ary)
   }
+
+  getObjectAt = idx => new KdbTimestampAtom(this.ary[idx])
+
   toString = () => {
     if (this.ary.length === 0) return '(12h$())'
     if (this.ary.length === 1) return `(enlist ${KdbTimeUtil.Timestamp.toString(this.ary[0], true)})`
@@ -570,6 +606,9 @@ class KdbMonthVector extends KdbVector {
   constructor(att, ary) {
     super(13, att, ary)
   }
+
+  getObjectAt = idx => new KdbMonthAtom(this.ary[idx])
+
   toString = () => {
     if (this.ary.length === 0) return '(13h$())'
     if (this.ary.length === 1) return `(enlist ${KdbTimeUtil.Month.toString(this.ary[0], true)})`
@@ -586,6 +625,9 @@ class KdbDateVector extends KdbVector {
   constructor(att, ary) {
     super(14, att, ary)
   }
+
+  getObjectAt = idx => new KdbDateAtom(this.ary[idx])
+
   toString = () => {
     if (this.ary.length === 0) return '(14h$())'
     if (this.ary.length === 1) return `(enlist ${KdbTimeUtil.Date.toString(this.ary[0], true)})`
@@ -604,6 +646,9 @@ class KdbDateTimeVector extends KdbVector {
   constructor(att, ary) {
     super(15, att, ary)
   }
+
+  getObjectAt = idx => new KdbDateTimeAtom(this.ary[idx])
+
   toString = () => {
     if (this.ary.length === 0) return '(15h$())'
     if (this.ary.length === 1) return "(enlist 'nyi)"
@@ -620,6 +665,9 @@ class KdbTimespanVector extends KdbVector {
   constructor(att, ary) {
     super(16, att, ary)
   }
+
+  getObjectAt = idx => new KdbTimespanAtom(this.ary[idx])
+
   toString = () => {
     if (this.ary.length === 0) return '(16h$())'
     if (this.ary.length === 1) return `(enlist ${KdbTimeUtil.Timespan.toString(this.ary[0], true)})`
@@ -638,6 +686,9 @@ class KdbMinuteVector extends KdbVector {
   constructor(att, ary) {
     super(17, att, ary)
   }
+
+  getObjectAt = idx => new KdbMinuteAtom(this.ary[idx])
+
   toString = () => {
     if (this.ary.length === 0) return '(17h$())'
     if (this.ary.length === 1) return `(enlist ${KdbTimeUtil.Minute.toString(this.ary[0], true)})`
@@ -656,6 +707,9 @@ class KdbSecondVector extends KdbVector {
   constructor(att, ary) {
     super(18, att, ary)
   }
+
+  getObjectAt = idx => new KdbSecondAtom(this.ary[idx])
+
   toString = () => {
     if (this.ary.length === 0) return '(18h$())'
     if (this.ary.length === 1) return `(enlist ${KdbTimeUtil.Second.toString(this.ary[0], true)})`
@@ -674,6 +728,9 @@ class KdbTimeVector extends KdbVector {
   constructor(att, ary) {
     super(19, att, ary)
   }
+
+  getObjectAt = idx => new KdbTimeAtom(this.ary[idx])
+
   toString = () => {
     if (this.ary.length === 0) return '(19h$())'
     if (this.ary.length === 1) return `(enlist ${KdbTimeUtil.Time.toString(this.ary[0], true)})`
@@ -695,6 +752,14 @@ class KdbTable extends KdbType {
     this.cols = cols
     this.vals = vals
   }
+
+  count = () => this.vals.ary[0].count
+
+  getObjectAt = idx => {
+    const vals = this.vals.ary.map(vec => vec.getObjectAt(idx))
+    return new KdbDict(this.cols, new KdbList(0, vals))
+  }
+
   toString = () => `(flip${this.cols}!${this.vals})`
 }
 
