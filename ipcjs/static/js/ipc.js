@@ -96,8 +96,11 @@ const KdbTimeUtil = {
   DAYS_SINCE_EPOCH: 10957,
   MILLIS_SINCE_EPOCH: 10957 * 24 * 60 * 60 * 1000,
 
-
   Timestamp: {
+    toJsDate: function(nanos) {
+      let millis = Number(nanos / 1000000n)
+      return new Date(millis + KdbTimeUtil.MILLIS_SINCE_EPOCH)
+    },
     toTimeComponent: function(nanos) {
       nanos = nanos % KdbTimeUtil.NANOS_IN_DAY
       const h = nanos / KdbTimeUtil.NANOS_IN_HOUR
@@ -123,6 +126,11 @@ const KdbTimeUtil = {
   },
 
   Month: {
+    toJsDate: function(months) {
+      const y = 2000 + Math.floor(months / 12)
+      const m = months % 12
+      return new Date(Date.UTC(y, m, 1))
+    },
     toString: function(months, suffix) {
       const nil = MgKdb.int_to_0N_str(months, KdbConstants.i32, suffix ? 'm' : '')
       if (nil) return nil
@@ -136,6 +144,10 @@ const KdbTimeUtil = {
   },
 
   Date: {
+    toJsDate: function(days) {
+      days += KdbTimeUtil.DAYS_SINCE_EPOCH
+      return new Date(days * KdbTimeUtil.MILLIS_IN_DAY)
+    },
     toString: function(date, suffix) {
       const nil = MgKdb.int_to_0N_str(date, KdbConstants.i32, suffix ? 'd' : '')
       if (nil) return nil
@@ -162,6 +174,9 @@ const KdbTimeUtil = {
   },
 
   Timespan: {
+    toJsDate: function(nanos) {
+      return new Date(Number(nanos / 1000000n))
+    },
     toString: function(nanos, suffix) {
       const nil = MgKdb.int_to_0N_str(nanos, KdbConstants.i64, suffix ? 'n' : '')
       if (null !== nil) {
@@ -183,8 +198,11 @@ const KdbTimeUtil = {
   },
 
   Minute: {
+    toJsDate: function(mins) {
+      return new Date(mins * 60 * 1000)
+    },
     toString: function(mins, suffix) {
-      const nil = MgKdb.i32_to_null_str(mins, 'u')
+      const nil = MgKdb.int_to_0N_str(mins, KdbConstants.i32, suffix ? 'u' : '')
       if (nil) return nil
       const hours = Math.floor(mins / 60)
       mins = mins % 60
@@ -194,8 +212,11 @@ const KdbTimeUtil = {
   },
 
   Second: {
+    toJsDate: function(secs) {
+      return new Date(secs * 1000)
+    },
     toString: function(secs, suffix) {
-      const nil = MgKdb.i32_to_null_str(secs, 'v')
+      const nil = MgKdb.int_to_0N_str(secs, KdbConstants.i32, suffix ? 'v' : '')
       if (nil) return nil
       const hours = Math.floor(secs / 3600);
       secs -= hours * 3600;
@@ -207,8 +228,11 @@ const KdbTimeUtil = {
   },
 
   Time: {
+    toJsDate: function(millis) {
+      return new Date(millis)
+    },
     toString: function(time, suffix) {
-      const nil = MgKdb.i32_to_null_str(time, 't')
+      const nil = MgKdb.int_to_0N_str(time, KdbConstants.i32, suffix ? 't' : '')
       if (nil) return nil
       const hours = Math.floor(time / KdbTimeUtil.MILLIS_IN_HOUR)
       time -= hours * KdbTimeUtil.MILLIS_IN_HOUR
@@ -241,6 +265,12 @@ class KdbBoolAtom extends KdbAtom {
   constructor(val) {
     super(-1, !!val)
   }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.val !== 0
+  }
+
   toString = () => this.val ? '1b' : '0b'
 }
 
@@ -248,19 +278,33 @@ class KdbGuidAtom extends KdbAtom {
   constructor(val) {
     super(-2, MgKdb.chk_guid(val))
   }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.val
+  }
+
   toString = () => {
     return "'nyi"
   }
 }
 
 class KdbByteAtom extends KdbAtom {
+
   static toHexDigits = function(val) {
     const hex = val.toString(16)
     return hex.length === 2 ? hex : `0${hex}`
   }
+
   constructor(val) {
     super(-4, MgKdb.chk_is_int8(val))
   }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.val
+  }
+
   toString = () => {
     return `0x${KdbByteAtom.toHexDigits(this.val)}`
   }
@@ -270,6 +314,12 @@ class KdbShortAtom extends KdbAtom {
   constructor(val) {
     super(-5, MgKdb.chk_is_int16(val))
   }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.val
+  }
+
   toString = () => {
     const nil = MgKdb.int_to_0N_str(this.val, KdbConstants.i16, 'h')
     return null !== nil ? nil : `${this.val}h`
@@ -280,6 +330,12 @@ class KdbIntAtom extends KdbAtom {
   constructor(val) {
     super(-6, MgKdb.chk_is_int32(val))
   }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.val
+  }
+
   toString = () => {
     const nil = MgKdb.int_to_0N_str(this.val, KdbConstants.i32, 'i')
     return null !== nil ? nil : `${this.val}i`
@@ -290,6 +346,13 @@ class KdbLongAtom extends KdbAtom {
   constructor(val) {
     super(-7, MgKdb.chk_is_bigint(val))
   }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    // BigInt(Number.MAX_SAFE_INTEGER) ?
+    return Number(this.val)
+  }
+
   toString = () => {
     const nil = MgKdb.int_to_0N_str(this.val, KdbConstants.i64, '')
     return nil ? nil : `${this.val.toString()}j`
@@ -300,6 +363,12 @@ class KdbRealAtom extends KdbAtom {
   constructor(val) {
     super(-8, MgKdb.chk_is_float(val)) 
   }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.val
+  }
+
   toString = () => {
     const nil = MgKdb.fp_to_0N_str(this.val, 'e')
     return null !== nil ? nil : `${this.val}e`
@@ -310,6 +379,12 @@ class KdbFloatAtom extends KdbAtom {
   constructor(val) {
     super(-9, val) 
   }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.val
+  }
+
   toString = () => {
     const nil = MgKdb.fp_to_0N_str(this.val, 'f')
     return null !== nil ? nil : `${this.val}f`
@@ -320,6 +395,12 @@ class KdbCharAtom extends KdbAtom {
   constructor(val) {
     super(-10, String.fromCharCode(MgKdb.chk_is_int8(val)))
   }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.val
+  }
+
   toString = () => `"${this.val}"`
 }
 
@@ -327,6 +408,12 @@ class KdbSymbolAtom extends KdbAtom {
   constructor(val) {
     super(-11, MgKdb.chk_is_string(val))
   }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.val
+  }
+
   toString = () => {
     if (-1 !== this.val.indexOf(' ')) {
       return `(\`$"${this.val}")`
@@ -339,6 +426,12 @@ class KdbTimestampAtom extends KdbAtom {
   constructor(val) {
     super(-12, MgKdb.chk_is_bigint(val))
   }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return KdbTimeUtil.Timestamp.toJsDate(this.val)
+  }
+
   toString = () => KdbTimeUtil.Timestamp.toString(this.val, true)
 }
 
@@ -346,6 +439,12 @@ class KdbMonthAtom extends KdbAtom {
   constructor(val) {
     super(-13, MgKdb.chk_is_int32(val))
   }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return KdbTimeUtil.Month.toJsDate(this.val)
+  }
+
   toString = () => KdbTimeUtil.Month.toString(this.val, true)
 }
 
@@ -353,6 +452,12 @@ class KdbDateAtom extends KdbAtom {
   constructor(val) {
     super(-14, MgKdb.chk_is_int32(val))
   }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return KdbTimeUtil.Date.toJsDate(this.val)
+  }
+
   toString = () => KdbTimeUtil.Date.toString(this.val, true)
 }
 
@@ -360,6 +465,12 @@ class KdbDateTimeAtom extends KdbAtom {
   constructor(val) {
     super(-15, MgKdb.chk_is_float(val))
   }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return new Date(-1)
+  }
+
   toString = () => "'nyi"
 }
 
@@ -367,6 +478,12 @@ class KdbTimespanAtom extends KdbAtom {
   constructor(val) {
     super(-16, MgKdb.chk_is_bigint(val))
   }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return KdbTimeUtil.Timespan.toJsDate(this.val)
+  }
+
   toString = () => KdbTimeUtil.Timespan.toString(this.val, true)
 }
 
@@ -374,6 +491,12 @@ class KdbMinuteAtom extends KdbAtom {
   constructor(val) {
     super(-17, MgKdb.chk_is_int32(val))
   }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return KdbTimeUtil.Minute.toJsDate(this.val)
+  }
+
   toString = () => KdbTimeUtil.Minute.toString(this.val, true)
 }
 
@@ -381,6 +504,12 @@ class KdbSecondAtom extends KdbAtom {
   constructor(val) {
     super(-18, MgKdb.chk_is_int32(val))
   }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return KdbTimeUtil.Second.toJsDate(this.val)
+  }
+
   toString = () => KdbTimeUtil.Second.toString(this.val, true)
 }
 
@@ -388,6 +517,12 @@ class KdbTimeAtom extends KdbAtom {
   constructor(val) {
     super(-19, MgKdb.chk_is_int32(val))
   }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return KdbTimeUtil.Time.toJsDate(this.val)
+  }
+
   toString = () => KdbTimeUtil.Time.toString(this.val, true)
 }
 
@@ -401,6 +536,17 @@ class KdbList extends KdbType {
   count = () => this.ary.length
 
   getObjectAt = idx => this.ary[idx]
+
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, idx, this) 
+    return this.ary[idx].getJsObject(cfg)
+  }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.ary.map(val => val.getJsObject(cfg))
+  }
+  
 
   toString = () => {
     return '(' + this.ary.map(elm => elm.toString()).join(';') + ')'
@@ -422,6 +568,16 @@ class KdbBoolVector extends KdbVector {
   }
 
   getObjectAt = idx => new KdbBoolAtom(this.ary[idx])
+
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[-this.typ]) return cfg[-this.typ](cfg, this.ary[idx]) 
+    return this.ary[idx] !== 0
+  }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.ary.map(val => val !== 0)
+  }
   
   toString = () => {
     if (this.ary.length === 0) return '(1h$())'
@@ -437,6 +593,15 @@ class KdbByteVector extends KdbVector {
 
   getObjectAt = idx => new KdbByteAtom(this.ary[idx])
 
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[-this.typ]) return cfg[-this.typ](cfg, this.ary[idx]) 
+    return this.ary[idx]
+  }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.ary.slice()
+  }
   toString = () => {
     if (this.ary.length === 0) return '(4h$())'
     if (this.ary.length === 1) return `(enlist 0x${KdbByteAtom.toHexDigits(this.ary[0])})`
@@ -454,6 +619,16 @@ class KdbShortVector extends KdbVector {
   }
 
   getObjectAt = idx => new KdbShortAtom(this.ary[idx])
+
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[-this.typ]) return cfg[-this.typ](cfg, this.ary[idx]) 
+    return this.ary[idx]
+  }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.ary.slice()
+  }
 
   toString = () => {
     if (this.ary.length === 0) return '(5h$())'
@@ -474,6 +649,16 @@ class KdbIntVector extends KdbVector {
 
   getObjectAt = idx => new KdbIntAtom(this.ary[idx])
 
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[-this.typ]) return cfg[-this.typ](cfg, this.ary[idx]) 
+    return this.ary[idx]
+  }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.ary.slice()
+  }
+
   toString = () => {
     if (this.ary.length === 0) return '(6h$())'
     if (this.ary.length === 1) return `(enlist ${this.ary[0]}i)`
@@ -492,6 +677,17 @@ class KdbLongVector extends KdbVector {
   }
 
   getObjectAt = idx => new KdbLongAtom(this.ary[idx])
+
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[-this.typ]) return cfg[-this.typ](cfg, this.ary[idx]) 
+    // BigInt(Number.MAX_SAFE_INTEGER) ? 
+    return Number(this.ary[idx])
+  }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.ary.map(val => Number(val))
+  }
 
   toString = () => {
     if (this.ary.length === 0) return '(7h$())'
@@ -512,6 +708,16 @@ class KdbRealVector extends KdbVector {
 
   getObjectAt = idx => new KdbRealAtom(this.ary[idx])
 
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[-this.typ]) return cfg[-this.typ](cfg, this.ary[idx]) 
+    return this.ary[idx]
+  }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.ary.slice()
+  }
+
   toString = () => {
     if (this.ary.length === 0) return '(8h$())'
     if (this.ary.length === 1) return `(enlist ${this.ary[0]}e)`
@@ -530,6 +736,16 @@ class KdbFloatVector extends KdbVector {
   }
 
   getObjectAt = idx => new KdbFloatAtom(this.ary[idx])
+
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[-this.typ]) return cfg[-this.typ](cfg, this.ary[idx]) 
+    return this.ary[idx]
+  }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.ary.slice()
+  }
 
   toString = () => {
     if (this.ary.length === 0) return '(9h$())'
@@ -551,6 +767,16 @@ class KdbCharVector extends KdbVector {
 
   getObjectAt = idx => new KdbCharAtom(this.ary[idx])
 
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[-this.typ]) return cfg[-this.typ](cfg, this.ary[idx]) 
+    return this.asString()
+  }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.asString()
+  }
+
   asString = () => {
     if (this.string === null) {
       this.string = CdotJS.u16u8(this.ary)
@@ -566,6 +792,16 @@ class KdbSymbolVector extends KdbVector {
   }
 
   getObjectAt = idx => new KdbSymbolAtom(this.ary[idx])
+
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[-this.typ]) return cfg[-this.typ](cfg, this.ary[idx]) 
+    return this.ary[idx]
+  }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.ary.slice()
+  }
 
   toString = () => {
     if (this.ary.length === 0) return '(`$())'
@@ -588,6 +824,16 @@ class KdbTimestampVector extends KdbVector {
 
   getObjectAt = idx => new KdbTimestampAtom(this.ary[idx])
 
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[-this.typ]) return cfg[-this.typ](cfg, this.ary[idx]) 
+    return KdbTimeUtil.Timestamp.toJsDate(this.ary[idx])
+  }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.ary.map(KdbTimeUtil.Timestamp.toJsDate)
+  }
+
   toString = () => {
     if (this.ary.length === 0) return '(12h$())'
     if (this.ary.length === 1) return `(enlist ${KdbTimeUtil.Timestamp.toString(this.ary[0], true)})`
@@ -609,6 +855,16 @@ class KdbMonthVector extends KdbVector {
 
   getObjectAt = idx => new KdbMonthAtom(this.ary[idx])
 
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[-this.typ]) return cfg[-this.typ](cfg, this.ary[idx]) 
+    return KdbTimeUtil.Month.toJsDate(this.ary[idx])
+  }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.ary.map(KdbTimeUtil.Month.toJsDate)
+  }
+
   toString = () => {
     if (this.ary.length === 0) return '(13h$())'
     if (this.ary.length === 1) return `(enlist ${KdbTimeUtil.Month.toString(this.ary[0], true)})`
@@ -627,6 +883,16 @@ class KdbDateVector extends KdbVector {
   }
 
   getObjectAt = idx => new KdbDateAtom(this.ary[idx])
+
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[-this.typ]) return cfg[-this.typ](cfg, this.ary[idx]) 
+    return KdbTimeUtil.Date.toJsDate(this.ary[idx])
+  }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.ary.map(KdbTimeUtil.Date.toJsDate)
+  }
 
   toString = () => {
     if (this.ary.length === 0) return '(14h$())'
@@ -649,6 +915,16 @@ class KdbDateTimeVector extends KdbVector {
 
   getObjectAt = idx => new KdbDateTimeAtom(this.ary[idx])
 
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[-this.typ]) return cfg[-this.typ](cfg, this.ary[idx]) 
+    return new Date(-1)
+  }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.ary.map(val => new Date(-1))
+  }
+
   toString = () => {
     if (this.ary.length === 0) return '(15h$())'
     if (this.ary.length === 1) return "(enlist 'nyi)"
@@ -667,6 +943,16 @@ class KdbTimespanVector extends KdbVector {
   }
 
   getObjectAt = idx => new KdbTimespanAtom(this.ary[idx])
+
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[-this.typ]) return cfg[-this.typ](cfg, this.ary[idx]) 
+    return KdbTimeUtil.Timespan.toJsDate(this.ary[idx])
+  }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.ary.map(KdbTimeUtil.Timespan.toJsDate)
+  }
 
   toString = () => {
     if (this.ary.length === 0) return '(16h$())'
@@ -689,6 +975,16 @@ class KdbMinuteVector extends KdbVector {
 
   getObjectAt = idx => new KdbMinuteAtom(this.ary[idx])
 
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[-this.typ]) return cfg[-this.typ](cfg, this.ary[idx]) 
+    return KdbTimeUtil.Minute.toJsDate(this.ary[idx])
+  }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.ary.map(KdbTimeUtil.Minute.toJsDate)
+  }
+
   toString = () => {
     if (this.ary.length === 0) return '(17h$())'
     if (this.ary.length === 1) return `(enlist ${KdbTimeUtil.Minute.toString(this.ary[0], true)})`
@@ -710,6 +1006,16 @@ class KdbSecondVector extends KdbVector {
 
   getObjectAt = idx => new KdbSecondAtom(this.ary[idx])
 
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[-this.typ]) return cfg[-this.typ](cfg, this.ary[idx]) 
+    return KdbTimeUtil.Second.toJsDate(this.ary[idx])
+  }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.ary.map(KdbTimeUtil.Second.toJsDate)
+  }
+
   toString = () => {
     if (this.ary.length === 0) return '(18h$())'
     if (this.ary.length === 1) return `(enlist ${KdbTimeUtil.Second.toString(this.ary[0], true)})`
@@ -730,6 +1036,16 @@ class KdbTimeVector extends KdbVector {
   }
 
   getObjectAt = idx => new KdbTimeAtom(this.ary[idx])
+
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[-this.typ]) return cfg[-this.typ](cfg, this.ary[idx]) 
+    return KdbTimeUtil.Time.toJsDate(this.ary[idx])
+  }
+
+  getJsObject = cfg => {
+    if (cfg[this.typ]) return cfg[this.typ](cfg, this)
+    return this.ary.map(KdbTimeUtil.Time.toJsDate)
+  }
 
   toString = () => {
     if (this.ary.length === 0) return '(19h$())'
@@ -758,6 +1074,24 @@ class KdbTable extends KdbType {
   getObjectAt = idx => {
     const vals = this.vals.ary.map(vec => vec.getObjectAt(idx))
     return new KdbDict(this.cols, new KdbList(0, vals))
+  }
+
+  getJsObjectAt = (cfg, idx) => {
+    if (cfg[98]) return cfg[98](cfg, idx, this.getObjectAt(idx))
+    const cls = this.cols.ary
+    const vls = this.vals.ary
+    return Object.fromEntries(cls.map((col, c) => [col, vls[c].getJsObjectAt(cfg, idx)]))
+  }
+
+  getJsObject = cfg => {
+    if (cfg[99]) return cfg[99](cfg, this)
+    const cls = this.cols.ary
+    const vls = this.vals.ary
+    const ary = new Array(vls[0].count())
+    for (let i = 0 ; i < ary.length ; i++) {
+      ary[i] = this.getJsObjectAt(cfg, i)
+    }
+    return ary
   }
 
   toString = () => `(flip${this.cols}!${this.vals})`
