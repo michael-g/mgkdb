@@ -1217,7 +1217,7 @@ class KdbProjection extends KdbType {
 }
 
 
-class _KdbMessage {
+class _KdbReader {
   constructor(aryBuf) {
     this.u8y = new Uint8Array(aryBuf)
     this.i8y = new Int8Array(aryBuf)
@@ -1334,58 +1334,6 @@ class _KdbMessage {
   }
   readTimeAtom = () => {
     return new KdbTimeAtom(this.readI32())
-  }
-
-  read = () => {
-    let typ = this.i8y[this.pos++]
-    switch (typ) {
-      case -19: return this.readTimeAtom()
-      case -18: return this.readSecondAtom()
-      case -17: return this.readMinuteAtom()
-      case -16: return this.readTimespanAtom()
-      case -15: return this.readDateTimeAtom()
-      case -14: return this.readDateAtom()
-      case -13: return this.readMonthAtom()
-      case -12: return this.readTimestampAtom()
-      case -11: return this.readSymbolAtom()
-      case -10: return this.readCharAtom()
-      case  -9: return this.readFloatAtom()
-      case  -8: return this.readRealAtom()
-      case  -7: return this.readLongAtom()
-      case  -6: return this.readIntAtom()
-      case  -5: return this.readShortAtom()
-      case  -4: return this.readByteAtom()
-      case  -2: return this.readGuidAtom()
-      case  -1: return this.readBoolAtom()
-      case   0: return this.readList()
-      case   1: return this.readBoolVector()
-      case   2: return this.readGuidVector()
-      case   4: return this.readByteVector()
-      case   5: return this.readShortVector()
-      case   6: return this.readIntVector()
-      case   7: return this.readLongVector()
-      case   8: return this.readRealVector()
-      case   9: return this.readFloatVector()
-      case  10: return this.readCharVector()
-      case  11: return this.readSymbolVector()
-      case  12: return this.readTimestampVector()
-      case  13: return this.readMonthVector()
-      case  14: return this.readDateVector()
-      case  15: return this.readDateTimeVector()
-      case  16: return this.readTimespanVector()
-      case  17: return this.readMinuteVector()
-      case  18: return this.readSecondVector()
-      case  19: return this.readTimeVector()
-      case  98: return this.readTable()
-      case  99: return this.readDict()
-      case 100: return this.readFunction()
-      case 101: return this.readUnary()
-      case 102: return this.readBinary()
-      case 103: return this.readTernary()
-      case 104: return this.readProjection()
-      default:
-        throw new Error("'nyi: " + typ)
-    }
   }
 
   readList = () => {
@@ -1537,15 +1485,265 @@ class _KdbMessage {
     }
     return new KdbProjection(fun, ary)
   }
+  read = () => {
+    let typ = this.i8y[this.pos++]
+    switch (typ) {
+      case -19: return this.readTimeAtom()
+      case -18: return this.readSecondAtom()
+      case -17: return this.readMinuteAtom()
+      case -16: return this.readTimespanAtom()
+      case -15: return this.readDateTimeAtom()
+      case -14: return this.readDateAtom()
+      case -13: return this.readMonthAtom()
+      case -12: return this.readTimestampAtom()
+      case -11: return this.readSymbolAtom()
+      case -10: return this.readCharAtom()
+      case  -9: return this.readFloatAtom()
+      case  -8: return this.readRealAtom()
+      case  -7: return this.readLongAtom()
+      case  -6: return this.readIntAtom()
+      case  -5: return this.readShortAtom()
+      case  -4: return this.readByteAtom()
+      case  -2: return this.readGuidAtom()
+      case  -1: return this.readBoolAtom()
+      case   0: return this.readList()
+      case   1: return this.readBoolVector()
+      case   2: return this.readGuidVector()
+      case   4: return this.readByteVector()
+      case   5: return this.readShortVector()
+      case   6: return this.readIntVector()
+      case   7: return this.readLongVector()
+      case   8: return this.readRealVector()
+      case   9: return this.readFloatVector()
+      case  10: return this.readCharVector()
+      case  11: return this.readSymbolVector()
+      case  12: return this.readTimestampVector()
+      case  13: return this.readMonthVector()
+      case  14: return this.readDateVector()
+      case  15: return this.readDateTimeVector()
+      case  16: return this.readTimespanVector()
+      case  17: return this.readMinuteVector()
+      case  18: return this.readSecondVector()
+      case  19: return this.readTimeVector()
+      case  98: return this.readTable()
+      case  99: return this.readDict()
+      case 100: return this.readFunction()
+      case 101: return this.readUnary()
+      case 102: return this.readBinary()
+      case 103: return this.readTernary()
+      case 104: return this.readProjection()
+      default:
+        throw new Error("'nyi: " + typ)
+    }
+  }
+}
+
+class _KdbWriter {
+  constructor(msgTyp, msg) {
+    this.msgTyp = msgTyp
+    this.msg = msg
+    this.psz = this.writeSz(msg)
+    this.msz = 8 + this.psz
+    this.dst = new ArrayBuffer(this.msz)
+    this.buf = new Uint8Array(this.dst)
+    this.tmp = new Uint8Array(8)
+    this.i32 = new Int32Array(this.tmp.buffer)
+    this.i64 = new BigInt64Array(this.tmp.buffer)
+    this.f32 = new Float32Array(this.tmp.buffer)
+    this.f64 = new Float64Array(this.tmp.buffer)
+  }
+  writeI8  = val => this.buf[this.pos++] = val
+  writeI16 = val => { this.i32[0] = val; for (let i = 0 ; i < 2 ; i++) this.buf[this.pos++] = this.tmp[i] }
+  writeI32 = val => { this.i32[0] = val; for (let i = 0 ; i < 4 ; i++) this.buf[this.pos++] = this.tmp[i] }
+  writeI64 = val => { this.i64[0] = val; for (let i = 0 ; i < 8 ; i++) this.buf[this.pos++] = this.tmp[i] }
+  writeF32 = val => { this.f32[0] = val; for (let i = 0 ; i < 4 ; i++) this.buf[this.pos++] = this.tmp[i] }
+  writeF64 = val => { this.f32[0] = val; for (let i = 0 ; i < 8 ; i++) this.buf[this.pos++] = this.tmp[i] }
+  writeVecHdr = vec => {
+    this.writeI8(vec.typ)
+    this.writeI8(vec.att)
+    this.writeI32(vec.ary.length)
+  }
+  writeVec = (wfn, vec) => {
+    this.writeVecHdr(vec)
+    vec.ary.forEach(wfn)
+  }
+  writeSz = elm => {
+    switch(elm.typ) {
+      case -19:
+      case -18:
+      case -17:
+      case -14:
+      case -13:
+      case  -8:
+      case  -6:
+        return 5
+      case -16:
+      case -15:
+      case -12:
+      case  -9:
+      case  -7:
+        return 9
+      case  -5:
+        return 3
+      case -11:
+        return 1 + elm.val.length + 1
+      case -10:
+      case  -4:
+      case  -1:
+      case 101:
+      case 102:
+      case 103:
+        return 2
+      case   0: 
+        return 6 + elm.ary.map(this.writeSz)
+      case   1:
+      case   4:
+      case  10:
+        return 6 + elm.ary.length
+      case  11:
+        return elm.ary.reduce((sum, val) => sum + val.length + 1, 6)
+      case   5:
+        return 6 + 2 * elm.ary.length
+      case   7:
+      case   9:
+      case  12:
+      case  15:
+      case  16:
+        return 6 + 8 * elm.ary.length
+      case   6:
+      case   8:
+      case  13:
+      case  14:
+      case  17:
+      case  18:
+      case  19:
+        return 6 + 4 * elm.ary.length
+      case  98:
+        return 3 + this.writeSz(elm.keys) + this.writeSz(elm.vals)
+      case  99:
+        return 1 + this.writeSz(elm.keys) + this.writeSz(elm.vals)
+      case 100:
+      case 104:
+      default:
+        throw new Error("'nyi: " + elm.typ)
+    }
+  }
+  writeElm = elm => {
+    switch (elm.typ) {
+      case -19:
+      case -18:
+      case -17:
+      case -14:
+      case -13:
+      case  -6:
+        this.writeI8(elm.typ)
+        return this.writeI32(elm.val)
+      case -16:
+      case -15:
+      case -12:
+      case  -7:
+        this.writeI8(elm.typ)
+        return this.writeI64(elm.val)
+      case -15:
+      case  -9:
+        this.writeI8(elm.typ)
+        return this.writeF64(elm.val)
+      case  -8:
+        this.writeI8(elm.typ)
+        return this.writeF32(elm.val)
+      case  -5:
+        this.writeI8(elm.typ)
+        return this.writeI16(elm.val)
+      case -10:
+      case  -4:
+      case  -1:
+      case 101:
+      case 102:
+      case 103:
+        this.writeI8(elm.typ)
+        return this.writeI8(elm.val)
+      case -11: {
+        this.writeI8(elm.typ)
+        for (let i = 0 ; i < elm.val.length ; i++) {
+          this.writeI8(elm.val.charCodeAt(i))
+        }
+        this.writeI8(0)
+        return
+      }
+      case   0:
+        return this.writeVec(this.writeElm, elm)
+      case   1:
+      case   4:
+      case  10:
+        return this.writeVec(this.writeI8, elm)
+      case   5:
+        return this.writeVec(this.writeI16, elm)
+      case   6:
+      case  13:
+      case  14:
+      case  17:
+      case  18:
+      case  19:
+        return this.writeVec(this.writeI32, elm)
+      case   7:
+      case  12:
+      case  16:
+        return this.writeVec(this.writeI64, elm)
+      case   8:
+        return this.writeVec(this.writeF32, elm)
+      case   9:
+      case  15:
+        return this.writeVec(this.writeF64, elm)
+      case  98: 
+        this.writeI8(elm.typ)
+        this.writeI8(elm.att)
+        this.writeI8(99)
+        this.writeElm(elm.keys)
+        this.writeElm(elm.vals)
+        return
+      case  99: 
+        this.writeI8(elm.typ)
+        this.writeElm(elm.keys)
+        this.writeElm(elm.vals)
+        return
+      case 100:
+      case 104:
+      default:
+        throw new Error("'nyi : " + elm.typ)
+    }
+  }
+  write = () => {
+    this.pos = 0
+    this.writeI8(1)
+    this.writeI8(this.msgTyp)
+    this.writeI8(0)
+    this.writeI8(0)
+    this.writeI32(this.msz)
+    this.writeElm(this.msg)
+
+    // const str = []
+    // const F2 = MgFormat.NUM_FMT_2D
+    // for (let i = 0 ; i < this.buf.length ; i++) {
+    //   str.push(KdbByteAtom.toHexDigits(this.buf[i]))
+    // }
+    // console.log("0x" + str.join(''))
+    return this.buf
+  }
 }
 
 MgKdb.deserialize = function(aryBuf) {
-  const rdr = new _KdbMessage(aryBuf)
+  const rdr = new _KdbReader(aryBuf)
   const msg = {
     typ: rdr.typ,
     msg: rdr.read()
   }
   return msg
+}
+
+MgKdb.serialize = function(msgTyp, msg) {
+  const wtr = new _KdbWriter(msgTyp, msg)
+  const buf = wtr.write()
+  return buf
 }
 
 class _MgWs {
@@ -1574,8 +1772,9 @@ class _MgWs {
   _wsMsg = evt => { // evt ... data, origin, 
     const obj = MgKdb.deserialize(evt.data)
     console.log("Deserialized message: ", obj.msg.toString(), obj.msg)
+    const buf = MgKdb.serialize(0, obj.msg)
+    this.ws.send(buf)
   }
-
 
 }
 
