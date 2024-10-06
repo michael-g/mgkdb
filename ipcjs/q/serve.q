@@ -5,7 +5,16 @@
  }
 
 .web.zws:{[X]
-  .web.log .Q.s1 -9!X
+  msg:-9!X
+ ;.web.log .Q.s1 msg
+ ;.mg.msg:msg
+ ;if[`.web.request ~ first msg
+    ;qid:msg 1
+    ;rps:value msg 2
+    ;msg:(`.web.response;qid;0b;rps)
+    ;.web.log "Replying with ",.Q.s1 msg
+    ;(neg .z.w) -8! msg
+    ]
  }
 
 .web.init:{

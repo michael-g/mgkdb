@@ -2,18 +2,83 @@
 <head>
   <script type="text/javascript">
     const MgCtx = {}
-    MgCtx.onConnected = function(conn) {
-      console.info("Connection reported as open")
+    class Listener {
+      onConnected = conn => {
+        this.conn = conn
+      }
+      onData = (conn, msgType, data) => {
+        if (98 === data.typ) {
+          const div = document.getElementById('root_id')
+
+        }
+      }
+      onError = (conn, evt) => {}
+      onDisconnected = (conn) => {}
     }
 
     function ipcReady() {
-      const conn = new MgKdb.Connection('ws://localhost:30098', MgCtx.onConnected)
+      MgCtx.listener = new Listener()
+      const conn = new MgKdb.Connection('ws://localhost:30098', MgCtx.listener)
       console.debug("DEBUG: created %s", conn.constructor.name)
-      MgCtx.conn = conn
     }
   </script>
   <script type="text/javascript" src="/js/ipc.js" onload="ipcReady()"></script>
+  <style type="text/css">
+    .testClass {
+      display: flex;
+      flex-direction: row;
+    }
+    .testClass > DIV {
+      display: flex;
+      flex-direction: column;
+      width: 6rem;
+      overflow-x: hidden;
+    }
+    .testClass > DIV:nth-child(1) {
+      width: 9rem;
+    }
+    .testClass > DIV > DIV {
+      display: flex;
+      flex-direction: column;
+      flex-wrap: nowrap;
+      justify-content: center;
+      align-items: center;
+      height: 1.7rem;
+      overflow: hidden;
+      border-bottom: 1px solid silver;
+      border-right: 1px solid silver;
+      padding: 0.2rem 0.3rem;
+    }
+    .testClass > DIV > DIV:last-child {
+      border-bottom: none;
+    }
+    .testClass > DIV:last-child > DIV {
+      border-right: none;
+    }
+
+  </style>
 </head>
 <body>
+  <div id="root_id"></div>
+  <div class="testClass">
+    <div>
+      <div>VOD.L</div>
+      <div>GSK.L</div>
+      <div>AZN.L</div>
+      <div>AAL.L</div>
+    </div>
+    <div>
+      <div>100</div>
+      <div>101</div>
+      <div>102</div>
+      <div>103</div>
+    </div>
+    <div>
+      <div>99.0</div>
+      <div>99.0</div>
+      <div>99.0</div>
+      <div>99.0</div>
+    </div>
+  </div>
 </body>
 </html>

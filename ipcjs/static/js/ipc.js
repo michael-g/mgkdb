@@ -1,5 +1,5 @@
 
-const MgKdb = {}
+export const MgKdb = {}
 
 MgKdb.chk_guid = function(val) {
   return val // TODO
@@ -16,6 +16,7 @@ MgKdb.chk_is_int16 = function(val) {
   if (!Number.isInteger(val)) throw new TypeError("'type")
   return val
 }
+
 MgKdb.chk_is_int32 = function(val) {
   if (val === undefined || val === null) return KdbConstants.NULL_INT
   if (!Number.isInteger(val)) throw new TypeError("'type")
@@ -261,7 +262,7 @@ class KdbAtom extends KdbType {
   }
 }
 
-class KdbBoolAtom extends KdbAtom {
+export class KdbBoolAtom extends KdbAtom {
   constructor(val) {
     super(-1, !!val)
   }
@@ -289,7 +290,7 @@ class KdbGuidAtom extends KdbAtom {
   }
 }
 
-class KdbByteAtom extends KdbAtom {
+export class KdbByteAtom extends KdbAtom {
 
   static toHexDigits = function(val) {
     const hex = val.toString(16)
@@ -310,7 +311,7 @@ class KdbByteAtom extends KdbAtom {
   }
 }
 
-class KdbShortAtom extends KdbAtom {
+export class KdbShortAtom extends KdbAtom {
   constructor(val) {
     super(-5, MgKdb.chk_is_int16(val))
   }
@@ -326,7 +327,7 @@ class KdbShortAtom extends KdbAtom {
   }
 }
 
-class KdbIntAtom extends KdbAtom {
+export class KdbIntAtom extends KdbAtom {
   constructor(val) {
     super(-6, MgKdb.chk_is_int32(val))
   }
@@ -342,7 +343,7 @@ class KdbIntAtom extends KdbAtom {
   }
 }
 
-class KdbLongAtom extends KdbAtom {
+export class KdbLongAtom extends KdbAtom {
   constructor(val) {
     super(-7, MgKdb.chk_is_bigint(val))
   }
@@ -359,7 +360,7 @@ class KdbLongAtom extends KdbAtom {
   }
 }
 
-class KdbRealAtom extends KdbAtom {
+export class KdbRealAtom extends KdbAtom {
   constructor(val) {
     super(-8, MgKdb.chk_is_float(val)) 
   }
@@ -375,7 +376,7 @@ class KdbRealAtom extends KdbAtom {
   }
 }
 
-class KdbFloatAtom extends KdbAtom {
+export class KdbFloatAtom extends KdbAtom {
   constructor(val) {
     super(-9, val) 
   }
@@ -391,7 +392,7 @@ class KdbFloatAtom extends KdbAtom {
   }
 }
 
-class KdbCharAtom extends KdbAtom {
+export class KdbCharAtom extends KdbAtom {
   constructor(val) {
     super(-10, String.fromCharCode(MgKdb.chk_is_int8(val)))
   }
@@ -404,7 +405,7 @@ class KdbCharAtom extends KdbAtom {
   toString = () => `"${this.val}"`
 }
 
-class KdbSymbolAtom extends KdbAtom {
+export class KdbSymbolAtom extends KdbAtom {
   constructor(val) {
     super(-11, MgKdb.chk_is_string(val))
   }
@@ -422,7 +423,7 @@ class KdbSymbolAtom extends KdbAtom {
   }
 }
 
-class KdbTimestampAtom extends KdbAtom {
+export class KdbTimestampAtom extends KdbAtom {
   constructor(val) {
     super(-12, MgKdb.chk_is_bigint(val))
   }
@@ -435,7 +436,7 @@ class KdbTimestampAtom extends KdbAtom {
   toString = () => KdbTimeUtil.Timestamp.toString(this.val, true)
 }
 
-class KdbMonthAtom extends KdbAtom {
+export class KdbMonthAtom extends KdbAtom {
   constructor(val) {
     super(-13, MgKdb.chk_is_int32(val))
   }
@@ -448,7 +449,7 @@ class KdbMonthAtom extends KdbAtom {
   toString = () => KdbTimeUtil.Month.toString(this.val, true)
 }
 
-class KdbDateAtom extends KdbAtom {
+export class KdbDateAtom extends KdbAtom {
   constructor(val) {
     super(-14, MgKdb.chk_is_int32(val))
   }
@@ -461,7 +462,7 @@ class KdbDateAtom extends KdbAtom {
   toString = () => KdbTimeUtil.Date.toString(this.val, true)
 }
 
-class KdbDateTimeAtom extends KdbAtom {
+export class KdbDateTimeAtom extends KdbAtom {
   constructor(val) {
     super(-15, MgKdb.chk_is_float(val))
   }
@@ -474,7 +475,7 @@ class KdbDateTimeAtom extends KdbAtom {
   toString = () => "'nyi"
 }
 
-class KdbTimespanAtom extends KdbAtom {
+export class KdbTimespanAtom extends KdbAtom {
   constructor(val) {
     super(-16, MgKdb.chk_is_bigint(val))
   }
@@ -487,7 +488,7 @@ class KdbTimespanAtom extends KdbAtom {
   toString = () => KdbTimeUtil.Timespan.toString(this.val, true)
 }
 
-class KdbMinuteAtom extends KdbAtom {
+export class KdbMinuteAtom extends KdbAtom {
   constructor(val) {
     super(-17, MgKdb.chk_is_int32(val))
   }
@@ -500,7 +501,7 @@ class KdbMinuteAtom extends KdbAtom {
   toString = () => KdbTimeUtil.Minute.toString(this.val, true)
 }
 
-class KdbSecondAtom extends KdbAtom {
+export class KdbSecondAtom extends KdbAtom {
   constructor(val) {
     super(-18, MgKdb.chk_is_int32(val))
   }
@@ -513,7 +514,7 @@ class KdbSecondAtom extends KdbAtom {
   toString = () => KdbTimeUtil.Second.toString(this.val, true)
 }
 
-class KdbTimeAtom extends KdbAtom {
+export class KdbTimeAtom extends KdbAtom {
   constructor(val) {
     super(-19, MgKdb.chk_is_int32(val))
   }
@@ -526,11 +527,11 @@ class KdbTimeAtom extends KdbAtom {
   toString = () => KdbTimeUtil.Time.toString(this.val, true)
 }
 
-class KdbList extends KdbType {
-  constructor(att, ary) {
+export class KdbList extends KdbType {
+  constructor(ary, att) {
     super(0)
-    this.att = att
     this.ary = ary
+    this.att = att ? att : 0
   }
 
   count = () => this.ary.length
@@ -554,17 +555,17 @@ class KdbList extends KdbType {
 }
 
 class KdbVector extends KdbType {
-  constructor(typ, att, ary) {
+  constructor(typ, ary, att) {
     super(typ)
-    this.att = att
     this.ary = ary
+    this.att = att
   }
   count = () => this.ary.length
 }
 
-class KdbBoolVector extends KdbVector {
-  constructor(att, ary) {
-    super(1, att, ary)
+export class KdbBoolVector extends KdbVector {
+  constructor(ary, att) {
+    super(1, ary, att)
   }
 
   getObjectAt = idx => new KdbBoolAtom(this.ary[idx])
@@ -586,9 +587,9 @@ class KdbBoolVector extends KdbVector {
   }
 }
 
-class KdbByteVector extends KdbVector {
-  constructor(att, ary) {
-    super(4, att, ary)
+export class KdbByteVector extends KdbVector {
+  constructor(ary, att) {
+    super(4, ary, att)
   }
 
   getObjectAt = idx => new KdbByteAtom(this.ary[idx])
@@ -613,9 +614,9 @@ class KdbByteVector extends KdbVector {
   }
 }
 
-class KdbShortVector extends KdbVector {
-  constructor(att, ary) {
-    super(5, att, ary)
+export class KdbShortVector extends KdbVector {
+  constructor(ary, att) {
+    super(5, ary, att)
   }
 
   getObjectAt = idx => new KdbShortAtom(this.ary[idx])
@@ -642,9 +643,9 @@ class KdbShortVector extends KdbVector {
   }
 }
 
-class KdbIntVector extends KdbVector {
-  constructor(att, ary) {
-    super(6, att, ary)
+export class KdbIntVector extends KdbVector {
+  constructor(ary, att) {
+    super(6, ary, att)
   }
 
   getObjectAt = idx => new KdbIntAtom(this.ary[idx])
@@ -671,9 +672,9 @@ class KdbIntVector extends KdbVector {
   }
 }
 
-class KdbLongVector extends KdbVector {
-  constructor(att, ary) {
-    super(7, att, ary) // TODO check tpe is BigInt64Array
+export class KdbLongVector extends KdbVector {
+  constructor(ary, att) {
+    super(7, ary, att) // TODO check tpe is BigInt64Array
   }
 
   getObjectAt = idx => new KdbLongAtom(this.ary[idx])
@@ -701,9 +702,9 @@ class KdbLongVector extends KdbVector {
   }
 }
 
-class KdbRealVector extends KdbVector {
-  constructor(att, ary) {
-    super(8, att, ary)
+export class KdbRealVector extends KdbVector {
+  constructor(ary) {
+    super(8, ary, att)
   }
 
   getObjectAt = idx => new KdbRealAtom(this.ary[idx])
@@ -730,9 +731,9 @@ class KdbRealVector extends KdbVector {
   }
 }
 
-class KdbFloatVector extends KdbVector {
-  constructor(att, ary) {
-    super(9, att, ary)
+export class KdbFloatVector extends KdbVector {
+  constructor(ary, att) {
+    super(9, ary, att)
   }
 
   getObjectAt = idx => new KdbFloatAtom(this.ary[idx])
@@ -759,9 +760,19 @@ class KdbFloatVector extends KdbVector {
   }
 }
 
-class KdbCharVector extends KdbVector {
-  constructor(att, ary) {
-    super(10, att, ary)
+export class KdbCharVector extends KdbVector {
+  static fromString = function(str) {
+    str = CdotJS.u8u16(str)
+    const len = str.length
+    const ary = new Int8Array(len)
+    for (let i = 0 ; i < len ; i++) {
+      ary[i] = str[i]
+    }
+    return new KdbCharVector(ary)
+  }
+
+  constructor(ary, att) {
+    super(10, ary, att)
     this.string = null
   }
 
@@ -786,9 +797,9 @@ class KdbCharVector extends KdbVector {
   toString = () => `"${this.asString()}"`
 }
 
-class KdbSymbolVector extends KdbVector {
-  constructor(att, ary) {
-    super(11, att, ary)
+export class KdbSymbolVector extends KdbVector {
+  constructor(ary, att) {
+    super(11, ary, att)
   }
 
   getObjectAt = idx => new KdbSymbolAtom(this.ary[idx])
@@ -817,9 +828,9 @@ class KdbSymbolVector extends KdbVector {
   }
 }
 
-class KdbTimestampVector extends KdbVector {
-  constructor(att, ary) {
-    super(12, att, ary)
+export class KdbTimestampVector extends KdbVector {
+  constructor(ary, att) {
+    super(12, ary, att)
   }
 
   getObjectAt = idx => new KdbTimestampAtom(this.ary[idx])
@@ -848,9 +859,9 @@ class KdbTimestampVector extends KdbVector {
   }
 }
 
-class KdbMonthVector extends KdbVector {
-  constructor(att, ary) {
-    super(13, att, ary)
+export class KdbMonthVector extends KdbVector {
+  constructor(ary, att) {
+    super(13, ary, att)
   }
 
   getObjectAt = idx => new KdbMonthAtom(this.ary[idx])
@@ -877,9 +888,9 @@ class KdbMonthVector extends KdbVector {
   }
 }
 
-class KdbDateVector extends KdbVector {
-  constructor(att, ary) {
-    super(14, att, ary)
+export class KdbDateVector extends KdbVector {
+  constructor(ary, att) {
+    super(14, ary, att)
   }
 
   getObjectAt = idx => new KdbDateAtom(this.ary[idx])
@@ -909,8 +920,8 @@ class KdbDateVector extends KdbVector {
 }
 
 class KdbDateTimeVector extends KdbVector {
-  constructor(att, ary) {
-    super(15, att, ary)
+  constructor(ary, att) {
+    super(15, ary, att)
   }
 
   getObjectAt = idx => new KdbDateTimeAtom(this.ary[idx])
@@ -937,9 +948,9 @@ class KdbDateTimeVector extends KdbVector {
 
 }
 
-class KdbTimespanVector extends KdbVector {
-  constructor(att, ary) {
-    super(16, att, ary)
+export class KdbTimespanVector extends KdbVector {
+  constructor(ary, att) {
+    super(16, ary, att)
   }
 
   getObjectAt = idx => new KdbTimespanAtom(this.ary[idx])
@@ -968,9 +979,9 @@ class KdbTimespanVector extends KdbVector {
   }
 }
 
-class KdbMinuteVector extends KdbVector {
-  constructor(att, ary) {
-    super(17, att, ary)
+export class KdbMinuteVector extends KdbVector {
+  constructor(ary, att) {
+    super(17, ary, att)
   }
 
   getObjectAt = idx => new KdbMinuteAtom(this.ary[idx])
@@ -999,9 +1010,9 @@ class KdbMinuteVector extends KdbVector {
   }
 }
 
-class KdbSecondVector extends KdbVector {
-  constructor(att, ary) {
-    super(18, att, ary)
+export class KdbSecondVector extends KdbVector {
+  constructor(ary, att) {
+    super(18, ary, att)
   }
 
   getObjectAt = idx => new KdbSecondAtom(this.ary[idx])
@@ -1030,9 +1041,9 @@ class KdbSecondVector extends KdbVector {
   }
 }
 
-class KdbTimeVector extends KdbVector {
-  constructor(att, ary) {
-    super(19, att, ary)
+export class KdbTimeVector extends KdbVector {
+  constructor(ary, att) {
+    super(19, ary, att)
   }
 
   getObjectAt = idx => new KdbTimeAtom(this.ary[idx])
@@ -1061,12 +1072,12 @@ class KdbTimeVector extends KdbVector {
   }
 }
 
-class KdbTable extends KdbType {
-  constructor(att, cols, vals) {
+export class KdbTable extends KdbType {
+  constructor(cols, vals, att) {
     super(98)
-    this.att = att
     this.cols = cols
     this.vals = vals
+    this.att = att
   }
 
   count = () => this.vals.ary[0].count
@@ -1097,7 +1108,7 @@ class KdbTable extends KdbType {
   toString = () => `(flip${this.cols}!${this.vals})`
 }
 
-class KdbDict extends KdbType {
+export class KdbDict extends KdbType {
   constructor(keys, vals) {
     super(99)
     this.keys = keys
@@ -1106,7 +1117,7 @@ class KdbDict extends KdbType {
   toString = () => `(${this.keys}!${this.vals})`
 }
 
-class KdbFunction extends KdbType {
+export class KdbFunction extends KdbType {
   constructor(txt) {
     super(100)
     this.txt = txt
@@ -1114,7 +1125,7 @@ class KdbFunction extends KdbType {
   toString = () => this.txt
 }
 
-class KdbUnary extends KdbType {
+export class KdbUnary extends KdbType {
   static VALS = [
       '::', 'flip', 'neg', 'first', 'reciprocal', 'where', 'reverse', 'null', 'group', 'iasc', 'hclose',
     'string', ',:', 'count', 'floor', 'not', 'inv', 'distinct', 'type', 'get', 'read0', 'read1', '2::',
@@ -1143,7 +1154,7 @@ class KdbUnary extends KdbType {
   }
 }
 
-class KdbBinary extends KdbType {
+export class KdbBinary extends KdbType {
   static VALS = [
     '::', '+', '-', '*', '%', '&', '|', '^', '=', '<', '>', '$', ',', '#', 
     '_', '~', '!', '?', '@', '.', '0:', '1:', '2:', 'in', 'within', 'like', 
@@ -1169,7 +1180,7 @@ class KdbBinary extends KdbType {
   }
 }
 
-class KdbTernary extends KdbType {
+export class KdbTernary extends KdbType {
   static VALS = [
     '\'', '/', '\\', '\':', '/:', '\\:', '*/'
   ]
@@ -1196,7 +1207,7 @@ class KdbTernary extends KdbType {
   }
 }
 
-class KdbProjection extends KdbType {
+export class KdbProjection extends KdbType {
   constructor(fun, rgs) {
     super(104)
     if (typeof(fun) === 'string') {
@@ -1343,14 +1354,14 @@ class _KdbReader {
     for (let i = 0 ; i < len ; i++) {
       ary[i] = this.read()
     }
-    return new KdbList(att, ary)
+    return new KdbList(ary, att)
   }
   readBoolVector = () => {
     const att = this.i8y[this.pos++]
     const len = this.readI32()
     const off = this.pos
     this.pos += len
-    return new KdbBoolVector(att, this.i8y.slice(off, off + len))
+    return new KdbBoolVector(this.i8y.slice(off, off + len), att)
   }
   readGuidVector = () => {
     throw new Error("'nyi")
@@ -1360,7 +1371,7 @@ class _KdbReader {
     const len = this.readI32()
     const off = this.pos
     this.pos += len
-    return new KdbByteVector(att, this.u8y.slice(off, off + len))
+    return new KdbByteVector(this.u8y.slice(off, off + len), att)
   }
   readShortVector = () => {
     const att = this.i8y[this.pos++]
@@ -1368,15 +1379,15 @@ class _KdbReader {
     for (let i = 0 ; i < ary.length ; i++) {
       ary[i] = this.readI16()
     }
-    return new KdbShortVector(att, ary)
+    return new KdbShortVector(ary, att)
   }
   readIntVector = () => {
     const att = this.i8y[this.pos++]
-    return new KdbIntVector(att, this.readI32Ary())
+    return new KdbIntVector(this.readI32Ary(), att)
   }
   readLongVector = () => {
     const att = this.i8y[this.pos++]
-    return new KdbLongVector(att, this.readI64Ary())
+    return new KdbLongVector(this.readI64Ary(), att)
   }
   readRealVector = () => {
     const att = this.i8y[this.pos++]
@@ -1384,7 +1395,7 @@ class _KdbReader {
     for (let i = 0 ; i < ary.length ; i++) {
       ary[i] = this.readF32()
     }
-    return new KdbRealVector(att, ary)
+    return new KdbRealVector(ary, att)
   }
   readFloatVector = () => {
     const att = this.i8y[this.pos++]
@@ -1392,14 +1403,14 @@ class _KdbReader {
     for (let i = 0 ; i < ary.length ; i++) {
       ary[i] = this.readF64()
     }
-    return new KdbFloatVector(att, ary)
+    return new KdbFloatVector(ary, att)
   }
   readCharVector = () => {
     const att = this.i8y[this.pos++]
     const len = this.readI32()
     const off = this.pos
     this.pos += len
-    return new KdbCharVector(att, this.i8y.slice(off, off + len)) // TODO pass i8 array instead
+    return new KdbCharVector(this.i8y.slice(off, off + len), att)
   }
   readSymbolVector = () => {
     const att = this.i8y[this.pos++]
@@ -1408,19 +1419,19 @@ class _KdbReader {
     for (let i = 0 ; i < len ; i++) {
       ary[i] = this.readSym()
     }
-    return new KdbSymbolVector(att, ary)
+    return new KdbSymbolVector(ary, att)
   }
   readTimestampVector = () => {
     const att = this.i8y[this.pos++]
-    return new KdbTimestampVector(att, this.readI64Ary())
+    return new KdbTimestampVector(this.readI64Ary(), att)
   }
   readMonthVector = () => {
     const att = this.i8y[this.pos++]
-    return new KdbMonthVector(att, this.readI32Ary())
+    return new KdbMonthVector(this.readI32Ary(), att)
   }
   readDateVector = () => {
     const att = this.i8y[this.pos++]
-    return new KdbDateVector(att, this.readI32Ary())
+    return new KdbDateVector(this.readI32Ary(), att)
   }
   readDateTimeVector = () => {
     const att = this.i8y[this.pos++]
@@ -1428,30 +1439,30 @@ class _KdbReader {
     for (let i = 0 ; i < ary.length ; i++) {
       ary[i] = this.readF64()
     }
-    throw new KdbDateTimeVector(att, ary)
+    throw new KdbDateTimeVector(ary, att)
   }
   readTimespanVector = () => {
     const att = this.i8y[this.pos++]
-    return new KdbTimespanVector(att, this.readI64Ary())
+    return new KdbTimespanVector(this.readI64Ary(), att)
   }
   readMinuteVector = () => {
     const att = this.i8y[this.pos++]
-    return new KdbMinuteVector(att, this.readI32Ary())
+    return new KdbMinuteVector(this.readI32Ary(), att)
   }
   readSecondVector = () => {
     const att = this.i8y[this.pos++]
-    return new KdbSecondVector(att, this.readI32Ary())
+    return new KdbSecondVector(this.readI32Ary(), att)
   }
   readTimeVector = () => {
     const att = this.i8y[this.pos++]
-    return new KdbTimeVector(att, this.readI32Ary())
+    return new KdbTimeVector(this.readI32Ary(), att)
   }
   readTable = () => {
     const att = this.i8y[this.pos++]
     const dct = this.i8y[this.pos++]
     const cols = this.read()
     const vals = this.read()
-    return new KdbTable(att, cols, vals)
+    return new KdbTable(cols, vals, att)
   }
   readDict = () => {
     const keys = this.read()
@@ -1558,6 +1569,13 @@ class _KdbWriter {
   writeI64 = val => { this.i64[0] = val; for (let i = 0 ; i < 8 ; i++) this.buf[this.pos++] = this.tmp[i] }
   writeF32 = val => { this.f32[0] = val; for (let i = 0 ; i < 4 ; i++) this.buf[this.pos++] = this.tmp[i] }
   writeF64 = val => { this.f32[0] = val; for (let i = 0 ; i < 8 ; i++) this.buf[this.pos++] = this.tmp[i] }
+  writeSym = val => {
+    const sym = CdotJS.u8u16(val)
+    for (let i = 0 ; i < sym.length ; i++) {
+      this.writeI8(sym[i])
+    }
+    this.writeI8(0)
+  }
   writeVecHdr = vec => {
     this.writeI8(vec.typ)
     this.writeI8(vec.att)
@@ -1586,7 +1604,7 @@ class _KdbWriter {
       case  -5:
         return 3
       case -11:
-        return 1 + elm.val.length + 1
+        return 1 + CdotJS.u8u16(elm.val).length + 1
       case -10:
       case  -4:
       case  -1:
@@ -1594,14 +1612,14 @@ class _KdbWriter {
       case 102:
       case 103:
         return 2
-      case   0: 
-        return 6 + elm.ary.map(this.writeSz)
+      case   0:
+        return elm.ary.reduce((sum, val) => sum + this.writeSz(val), 6)
       case   1:
       case   4:
       case  10:
         return 6 + elm.ary.length
       case  11:
-        return elm.ary.reduce((sum, val) => sum + val.length + 1, 6)
+        return elm.ary.reduce((sum, val) => sum + CdotJS.u8u16(val).length + 1, 6)
       case   5:
         return 6 + 2 * elm.ary.length
       case   7:
@@ -1664,10 +1682,7 @@ class _KdbWriter {
         return this.writeI8(elm.val)
       case -11: {
         this.writeI8(elm.typ)
-        for (let i = 0 ; i < elm.val.length ; i++) {
-          this.writeI8(elm.val.charCodeAt(i))
-        }
-        this.writeI8(0)
+        this.writeSym(elm.val)
         return
       }
       case   0:
@@ -1694,6 +1709,12 @@ class _KdbWriter {
       case   9:
       case  15:
         return this.writeVec(this.writeF64, elm)
+      case  11: {
+        this.writeVecHdr(elm)
+        for (let i = 0 ; i < elm.ary.length ; i++) {
+          this.writeSym(elm.ary[i])
+        }
+      }
       case  98: 
         this.writeI8(elm.typ)
         this.writeI8(elm.att)
@@ -1721,12 +1742,6 @@ class _KdbWriter {
     this.writeI32(this.msz)
     this.writeElm(this.msg)
 
-    // const str = []
-    // const F2 = MgFormat.NUM_FMT_2D
-    // for (let i = 0 ; i < this.buf.length ; i++) {
-    //   str.push(KdbByteAtom.toHexDigits(this.buf[i]))
-    // }
-    // console.log("0x" + str.join(''))
     return this.buf
   }
 }
@@ -1743,7 +1758,19 @@ MgKdb.deserialize = function(aryBuf) {
 MgKdb.serialize = function(msgTyp, msg) {
   const wtr = new _KdbWriter(msgTyp, msg)
   const buf = wtr.write()
+  const len = buf.length
+  const str = []
+  for (let i = 0 ; i < len ; i++) {
+    str.push(KdbByteAtom.toHexDigits(buf[i]))
+  }
+  console.log("Serialized: 0x" + str.join(''))
   return buf
+}
+
+const KdbMsgTyp = {
+  ASYNC: 0,
+  SYNC: 1,
+  RESPONSE: 2,
 }
 
 class _MgWs {
@@ -1755,32 +1782,77 @@ class _MgWs {
     this.ws.onclose = this._wsClosed
     this.ws.onerror = this._wsError
     this.ws.onmessage = this._wsMsg
-    this.onConnected = cbk
+    this.isConnected = false
+    this.listener = cbk
+    this.queryId = 0
+    this.queryTracker = new Map()
+  }
+  sendRequest = (msg, cbk) => {
+    if (!this.isConnected) {
+      throw new Error("Not connected")
+    }
+    if (typeof(cbk) !== 'function') {
+      throw new TypeError("Callback must be a function")
+    }
+    const hdr = new KdbSymbolAtom('.web.request')
+    const qid = new KdbIntAtom(this.queryId++)
+    const req = new KdbList([hdr, qid, msg])
+    const buf = MgKdb.serialize(KdbMsgTyp.SYNC, req)
+    this.ws.send(buf)
+    this.queryTracker.set(qid.val, cbk)
+  }
+  sendMessage = msg => {
+
+  }
+  close = () => {
+    this.ws.close()
   }
   _wsOpened = evt => { // evt: generic Event
+    this.isConnected = true
     console.debug("DEBUG: Connection opened to %s", this.url)
-    if (typeof(this.onConnected) === 'function') {
-      this.onConnected(this)
+    if (typeof(this.listener.onConnected) === 'function') {
+      this.listener.onConnected(this)
     }
   }
   _wsClosed = evt => { // evt ... reason, wasClean, code, 
+    this.isConnected = false
     console.debug("DEBUG: Connection to %s closd", this.url)
+    if (typeof(this.listener.onDisconnected) === 'function') {
+      this.listener.onDisconnected(this)
+    }
   }
   _wsError = evt => { // evt: generic Error event
     console.error("ERROR: WebSocket to %s signalled error: ", this.url, evt)
+    if (typeof(this.listener.onError) === 'function') {
+      this.listener.onError(this, evt)
+    }
   }
   _wsMsg = evt => { // evt ... data, origin, 
     const obj = MgKdb.deserialize(evt.data)
     console.log("Deserialized message: ", obj.msg.toString(), obj.msg)
-    const buf = MgKdb.serialize(0, obj.msg)
-    this.ws.send(buf)
+    if (KdbMsgTyp.ASYNC === obj.typ) {
+      // assume response like (`.web.response;qryId;isError;data)
+      const msg = obj.msg
+      if (msg.constructor === KdbList && msg.count() === 4 &&
+          msg.ary[0].constructor === KdbSymbolAtom && msg.ary[0].val === '.web.response' &&
+          msg.ary[1].constructor === KdbIntAtom && 
+          msg.ary[2].constructor === KdbBoolAtom) {
+        const [_fun, qid, isErr, data] = msg.ary
+        if (this.queryTracker.has(qid.val)) {
+          const cbk = this.queryTracker.get(qid.val)
+          this.queryTracker.delete(qid.val)
+          cbk(isErr, data)
+        }
+      }
+      else {
+        console.warn("WARN: dropped response: ", msg)
+      }
+    } // if-is-response
   }
 
 }
 
 MgKdb.Connection = _MgWs
-
-
 
 const CdotJS = {}
 
