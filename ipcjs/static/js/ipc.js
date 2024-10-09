@@ -81,7 +81,7 @@ const MgFormat = {
   NUM_FMT_9D: new Intl.NumberFormat('en-GB', {minimumIntegerDigits: 9, useGrouping: false }),
 }
 
-const KdbTimeUtil = {
+export const KdbTimeUtil = {
 
   NANOS_IN_DAY: 86400000000000n,
   NANOS_IN_HOUR: 86400000000000n / 24n,
@@ -814,6 +814,10 @@ export class KdbSymbolVector extends KdbVector {
     return this.ary.slice()
   }
 
+  findIndex = sym => {
+    return this.ary.findIndex(sym)
+  }
+
   toString = () => {
     if (this.ary.length === 0) return '(`$())'
     if (this.ary.length === 1) return `(enlist \`$"${this.ary[0]}")`
@@ -1103,6 +1107,10 @@ export class KdbTable extends KdbType {
       ary[i] = this.getJsObjectAt(cfg, i)
     }
     return ary
+  }
+
+  findColIdx = col => {
+    return this.keys.ary.findIndex(col)
   }
 
   toString = () => `(flip${this.cols}!${this.vals})`
@@ -1796,7 +1804,7 @@ class _MgWs {
     }
     const hdr = new KdbSymbolAtom('.web.request')
     const qid = new KdbIntAtom(this.queryId++)
-    const req = new KdbList([hdr, qid, msg])
+    const req = new KdbList([hdr, new KdbList(msg.toSpliced(1, 0, qid))])
     const buf = MgKdb.serialize(KdbMsgTyp.SYNC, req)
     this.ws.send(buf)
     this.queryTracker.set(qid.val, cbk)
@@ -1816,7 +1824,7 @@ class _MgWs {
   }
   _wsClosed = evt => { // evt ... reason, wasClean, code, 
     this.isConnected = false
-    console.debug("DEBUG: Connection to %s closd", this.url)
+    console.debug("DEBUG: Connection to %s closed", this.url)
     if (typeof(this.listener.onDisconnected) === 'function') {
       this.listener.onDisconnected(this)
     }

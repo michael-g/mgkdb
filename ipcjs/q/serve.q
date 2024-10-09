@@ -4,16 +4,31 @@
  ;
  }
 
+.web.getTable:{[C]
+  .web.log"In function .web.getTable"
+ ;n:1000;
+ ;sym:` sv' flip (upper n?`3;`L)
+ ;tme:(.z.d+08:00) + n?7 * 60 * 60 * 1000 * 1000 *1000
+ ;tbl:`sym`time xasc flip`time`sym`price`size!(tme;sym;n?1000f;768 + n ? 250000)
+ ;.web.replyOk[C;.z.w] tbl
+ }
+
+.web.reply:{[C;H;E;M]
+  msg:(`.web.response;C;E;M)
+ ;.web.log "Replying with ",.Q.s1 msg
+ ;(neg .z.w) -8! msg
+ }
+
+.web.replyOk:{[C;H;M]
+  .web.reply[C;H;0b;M]
+ }
+
 .web.zws:{[X]
   msg:-9!X
  ;.web.log .Q.s1 msg
  ;.mg.msg:msg
  ;if[`.web.request ~ first msg
-    ;qid:msg 1
-    ;rps:value msg 2
-    ;msg:(`.web.response;qid;0b;rps)
-    ;.web.log "Replying with ",.Q.s1 msg
-    ;(neg .z.w) -8! msg
+    ;value last msg
     ]
  }
 

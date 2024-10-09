@@ -2,12 +2,15 @@ import React from 'react'
 
 import * as Mg from './kdb/ipc'
 
+import Table from './Table'
+
 export default class AppRoot extends React.Component {
   constructor(props) {
     super(props)
     this.conn = null
     this.state = {
       connected: false,
+      table: null,
     }
   }
   componentDidMount = () => {
@@ -20,17 +23,20 @@ export default class AppRoot extends React.Component {
   componentWillUnmount = () => {
     this.conn.close()
   }
-  onHostNameResponse = (isErr, data) => {
-    console.log("hostname: " + data)
+  onTableResponse = (isErr, data) => {
+    console.log("onTableResponse " + data)
+    this.setState({table: data})
   }
   kdbConnected = conn => {
     this.setState({connected: true})
-    this.conn.sendRequest(Mg.KdbCharVector.fromString(".z.h"), this.onHostNameResponse)
+    this.conn.sendRequest([Mg.KdbCharVector.fromString(".web.getTable")], this.onTableResponse)
   }
   kdbDisconnected = conn => {
     this.setState({connected: false})
   }
   render = () => {
-    return <>Hello, World!</>
+    const table = this.state.table
+    if (table === null) return <>Hello, World!</>
+    return <Table tbl={table} cfg={{}}/>
   }
 }
