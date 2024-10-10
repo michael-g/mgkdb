@@ -402,7 +402,7 @@ export class KdbCharAtom extends KdbAtom {
     return this.val
   }
 
-  toString = () => `"${this.val}"`
+  toString = () => `"${String.fromCharCode(this.val)}"`
 }
 
 export class KdbSymbolAtom extends KdbAtom {
@@ -703,7 +703,7 @@ export class KdbLongVector extends KdbVector {
 }
 
 export class KdbRealVector extends KdbVector {
-  constructor(ary) {
+  constructor(ary, att) {
     super(8, ary, att)
   }
 
@@ -815,7 +815,7 @@ export class KdbSymbolVector extends KdbVector {
   }
 
   findIndex = sym => {
-    return this.ary.findIndex(sym)
+    return this.ary.findIndex(val => val === sym)
   }
 
   toString = () => {
@@ -1110,7 +1110,7 @@ export class KdbTable extends KdbType {
   }
 
   findColIdx = col => {
-    return this.keys.ary.findIndex(col)
+    return this.cols.findIndex(col)
   }
 
   toString = () => `(flip${this.cols}!${this.vals})`
@@ -1768,10 +1768,10 @@ MgKdb.serialize = function(msgTyp, msg) {
   const buf = wtr.write()
   const len = buf.length
   const str = []
-  for (let i = 0 ; i < len ; i++) {
-    str.push(KdbByteAtom.toHexDigits(buf[i]))
-  }
-  console.log("Serialized: 0x" + str.join(''))
+  // for (let i = 0 ; i < len ; i++) {
+  //   str.push(KdbByteAtom.toHexDigits(buf[i]))
+  // }
+  // console.log("Serialized: 0x" + str.join(''))
   return buf
 }
 
@@ -1837,7 +1837,8 @@ class _MgWs {
   }
   _wsMsg = evt => { // evt ... data, origin, 
     const obj = MgKdb.deserialize(evt.data)
-    console.log("Deserialized message: ", obj.msg.toString(), obj.msg)
+    // console.log("Deserialized message: ", obj.msg.toString(), obj.msg)
+    console.log("Deserialised message of type %d", obj.msg.typ)
     if (KdbMsgTyp.ASYNC === obj.typ) {
       // assume response like (`.web.response;qryId;isError;data)
       const msg = obj.msg

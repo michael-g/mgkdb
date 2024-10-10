@@ -24,7 +24,7 @@ export default class AppRoot extends React.Component {
     this.conn.close()
   }
   onTableResponse = (isErr, data) => {
-    console.log("onTableResponse " + data)
+    // console.log("onTableResponse " + data)
     this.setState({table: data})
   }
   kdbConnected = conn => {

@@ -6,10 +6,11 @@ import styles from './Table.module.css'
 
 class Vector extends React.PureComponent {
   renderElem = (val, idx) => <div key={idx}>{val}</div>
-  render = () => {//this.props.vec.ary.map(this.renderElem)
-    const ary = new Array(this.props.vec.ary.length)
+  render = () => {
+    const {vec, idcs} = this.props
+    const ary = new Array(vec.ary.length)
     for (let i = 0 ; i < ary.length ; i++) {
-      ary[i] = this.renderElem(this.props.vec.ary[i], i)
+      ary[i] = this.renderElem(vec.ary[idcs[i]], i)
     }
     return ary;
   }
@@ -19,15 +20,18 @@ class BoolVector extends Vector {
   renderElem = (val, idx) => <div key={idx}>{val}</div>
 }
 class ByteVector extends Vector {
-  renderElem = (val, idx) => <div key={idx}>{KdbByteAtom.toString(val)}</div>
+  renderElem = (val, idx) => <div key={idx}>0x{KdbByteAtom.toHexDigits(val)}</div>
 }
-class LongVector extends Vector {
+class IntegerVector extends Vector {
   static F = new Intl.NumberFormat('en-GB', {minimumIntegerDigits: 1, useGrouping: true })
-  renderElem = (val, idx) => <div key={idx} className={styles.integer}>{LongVector.F.format(val)}</div>
+  renderElem = (val, idx) => <div key={idx} className={styles.integer}>{IntegerVector.F.format(val)}</div>
 }
-class FloatVector extends Vector {
-  static F = new Intl.NumberFormat('en-GB', {minimumIntegerDigits: 1, minimumFractionDigits: 1, minimumFractionDigits: 3, maximumFractionDigits: 3, useGrouping: true })
-  renderElem = (val, idx) => <div key={idx} className={styles.fraction}>{FloatVector.F.format(val)}</div>
+class FloatingPointVector extends Vector {
+  static F = new Intl.NumberFormat('en-GB', {minimumIntegerDigits: 1, minimumFractionDigits: 3, maximumFractionDigits: 3, useGrouping: true })
+  renderElem = (val, idx) => <div key={idx} className={styles.fraction}>{FloatingPointVector.F.format(val)}</div>
+}
+class CharVector extends Vector {
+  renderElem = (val, idx) => <div key={idx}>{String.fromCharCode(val)}</div>
 }
 class TimestampVector extends Vector {
   renderElem = (val, idx) => <div key={idx}>{KdbTimeUtil.Timestamp.toString(val)}</div>
@@ -50,12 +54,20 @@ class SecondVector extends Vector {
 class TimeVector extends Vector {
   renderElem = (val, idx) => <div key={idx}>{KdbTimeUtil.Time.toString(val)}</div>
 }
+class List extends Vector {
+  renderElem = (val, idx) => <div key={idx}>{val.toString()}</div>
+}
 
 const TYPE_MAP = {
+  0: List,
   1: BoolVector,
   4: ByteVector,
-  7: LongVector,
-  9: FloatVector,
+  5: IntegerVector,
+  6: IntegerVector,
+  7: IntegerVector,
+  8: FloatingPointVector,
+  9: FloatingPointVector,
+  10: CharVector,
   12: TimestampVector,
   13: MonthVector,
   14: DateVector,
@@ -84,7 +96,9 @@ class Table extends React.PureComponent {
     super(props)
     this.anchorName = `--table-${Table.anchorId++}-col-`
     this.state = {
-      widths:{}
+      widths:{},
+      sortBy:[],
+      sortIdcs: null,
     }
   }
 
@@ -105,6 +119,7 @@ class Table extends React.PureComponent {
     }
     return tbl.cols.ary.map((col, idx) => [col, tbl.vals.ary[idx]])
   }
+ 
 
   getTitle = (cfg, col, idx) => {
     if (cfg.cols && cfg.cols.titles && col in cfg.cols.titles) {
@@ -130,13 +145,42 @@ class Table extends React.PureComponent {
     }
   }
 
+  sortGenAsc = ([lhs, _i], [rhs, _j]) => lhs == rhs ? 0 : lhs < rhs ? -1 : 1
+
+  sortNumAsc = ([lhs, _i], [rhs, _j]) => Number(lhs - rhs)
+
+  onSortClick = evt => {
+    const tbl = this.props.tbl
+    const col = evt.target.attributes['data-kcol-name'].value
+    const idx = tbl.findColIdx(col)
+    const vec = tbl.vals.ary[idx]
+    const src = vec.ary
+    const dst = new Array(src.length)
+    // TODO if previously sorted, use this.state.sortIdcs
+    for (let i = 0 ; i < src.length ; i++) {
+      dst[i] = [src[i], i]
+    }
+    let sortAsc = true
+    var idcs
+    if (sortAsc) {
+      var fun = this.sortGenAsc
+      if (vec.typ === 1 || (vec.typ >= 4 && vec.typ <= 9) || (vec.typ >= 12 && vec.typ <= 19)) {
+        fun = this.sortNumAsc
+      }
+      idcs = dst.sort(fun).map(([_, idx]) => idx)
+    }
+    this.setState({sortIdcs: idcs})
+  }
+
   renderHeader = (cfg, col, idx) => {
     const title = this.getTitle(cfg, col, idx)
     const name = this.anchorName + col
     const ref = React.createRef()
     const colOpts = {
       style: {anchorName: name},
-      ref: ref
+      onClick: this.onSortClick,
+      ['data-kcol-name']: col,
+      ref: ref,
     }
    
     const dragOpts = {
@@ -151,23 +195,24 @@ class Table extends React.PureComponent {
     </>)
   }
 
-  renderVals = (cfg, col, idx, val) => {
+  renderVals = (cfg, idc, col, idx, val) => {
     if (cfg.cols && cfg.cols.formatter && col in cfg.cols.colfmtr) {
       return cfg.cols.colfmtr(col, val)
     }
     if (cfg.cols && cfg.cols.formatter && col in cfg.cols.rowfmtr) {
       const fmt = cfg.cols.rowfmtr
       const ary = new Array(val.ary.length)
+      
       for (let i = 0 ; i < ary.length ; i++) {
-        ary[i] = fmt(col, val, i)
+        ary[i] = fmt(col, val, idc[i])
       }
       return ary
     }
     const Vec = !(val.typ in TYPE_MAP) ? Vector : TYPE_MAP[val.typ]
-    return <Vec vec={val} col={col} col_idx={idx}/>
+    return <Vec vec={val} col={col} col_idx={idx} idcs={idc}/>
   }
 
-  renderCol = (cfg, idx, pair) => {
+  renderCol = (cfg, idc, idx, pair) => {
     const [col, val] = pair
     const opts = {}
     if (col in this.state.widths) {
@@ -177,7 +222,7 @@ class Table extends React.PureComponent {
     return (
       <div key={col} className={styles.column} {...opts}>
         {this.renderHeader(cfg, col, idx)}
-        {this.renderVals(cfg, col, idx, val)}
+        {this.renderVals(cfg, idc, col, idx, val)}
       </div>
     )
   }
@@ -188,9 +233,12 @@ class Table extends React.PureComponent {
       return <></>
     }
     const cols = this.getColVecPairs()
+    let idcs = this.state.sortIdcs
+    idcs = idcs !== null ? idcs : Array.from(Array(tbl.vals.ary[0].count()).keys())
+    
     return (
       <div className={styles.table}>
-        {cols.map((pair, idx) => this.renderCol(cfg, idx, pair))}
+        {cols.map((pair, idx) => this.renderCol(cfg, idcs, idx, pair))}
       </div>
     )
   }
