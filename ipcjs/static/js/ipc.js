@@ -98,6 +98,15 @@ export const KdbTimeUtil = {
   MILLIS_SINCE_EPOCH: 10957 * 24 * 60 * 60 * 1000,
 
   Timestamp: {
+    nanosFromJsDate: function(date) {
+      var nanos = BigInt(date.getTime() - KdbTimeUtil.MILLIS_SINCE_EPOCH)
+      nanos *= 1000000n
+      return nanos
+    },
+    atomFromJsDate: function(date) {
+      const nanos = KdbTimeUtil.Timestamp.nanosFromJsDate(date)
+      return new KdbTimestampAtom(nanos)
+    },
     toJsDate: function(nanos) {
       let millis = Number(nanos / 1000000n)
       return new Date(millis + KdbTimeUtil.MILLIS_SINCE_EPOCH)
@@ -145,6 +154,14 @@ export const KdbTimeUtil = {
   },
 
   Date: {
+    daysFromJsDate: function(date) {
+      var days = Math.floor(date.getTime() / KdbTimeUtil.MILLIS_IN_DAY)
+      days -= KdbTimeUtil.DAYS_SINCE_EPOCH
+      return days
+    },
+    atomFromJsDate: function(date) {
+      return new KdbDateAtom(KdbTimeUtil.Date.daysFromJsDate(date))
+    },
     toJsDate: function(days) {
       days += KdbTimeUtil.DAYS_SINCE_EPOCH
       return new Date(days * KdbTimeUtil.MILLIS_IN_DAY)
@@ -229,6 +246,17 @@ export const KdbTimeUtil = {
   },
 
   Time: {
+    millisFromJsDate: function(date) {
+      var time
+      time = date.getUTCHours() * KdbTimeUtil.MILLIS_IN_HOUR
+      time += date.getUTCMinutes() * KdbTimeUtil.MILLIS_IN_MINUTE
+      time += date.getUTCSeconds() * KdbTimeUtil.MILLIS_IN_SECOND
+      time += date.getUTCMilliseconds()
+      return time
+    },
+    atomFromJsDate: function(date) {
+      return new KdbTimeAtom(KdbTimeUtil.Time.millisFromJsDate(date))
+    },
     toJsDate: function(millis) {
       return new Date(millis)
     },
@@ -450,6 +478,7 @@ export class KdbMonthAtom extends KdbAtom {
 }
 
 export class KdbDateAtom extends KdbAtom {
+
   constructor(val) {
     super(-14, MgKdb.chk_is_int32(val))
   }
@@ -1804,7 +1833,13 @@ class _MgWs {
     }
     const hdr = new KdbSymbolAtom('.web.request')
     const qid = new KdbIntAtom(this.queryId++)
-    const req = new KdbList([hdr, new KdbList(msg.toSpliced(1, 0, qid))])
+    if (msg.constructor === Array) {
+      msg = new KdbList(msg.toSpliced(1, 0, qid))
+    }
+    else if (msg.constructor === KdbList) {
+      msg.ary = msg.ary.toSpliced(1, 0, qid)
+    }
+    const req = new KdbList([hdr, msg])
     const buf = MgKdb.serialize(KdbMsgTyp.SYNC, req)
     this.ws.send(buf)
     this.queryTracker.set(qid.val, cbk)

@@ -97,7 +97,11 @@ class Table extends React.PureComponent {
     this.anchorName = `--table-${Table.anchorId++}-col-`
     this.state = {
       widths:{},
-      sortBy:[],
+      sort:{
+        idcs: null,
+        col: null,
+        asc: false,
+      },
       sortIdcs: null,
     }
   }
@@ -147,7 +151,11 @@ class Table extends React.PureComponent {
 
   sortGenAsc = ([lhs, _i], [rhs, _j]) => lhs == rhs ? 0 : lhs < rhs ? -1 : 1
 
+  sortGenDesc = ([lhs, _i], [rhs, _j]) => lhs == rhs ? 0 : lhs < rhs ? 1 : -1
+
   sortNumAsc = ([lhs, _i], [rhs, _j]) => Number(lhs - rhs)
+  
+  sortNumDesc = ([lhs, _i], [rhs, _j]) => Number(rhs - lhs)
 
   onSortClick = evt => {
     const tbl = this.props.tbl
@@ -156,20 +164,35 @@ class Table extends React.PureComponent {
     const vec = tbl.vals.ary[idx]
     const src = vec.ary
     const dst = new Array(src.length)
-    // TODO if previously sorted, use this.state.sortIdcs
-    for (let i = 0 ; i < src.length ; i++) {
-      dst[i] = [src[i], i]
-    }
-    let sortAsc = true
-    var idcs
-    if (sortAsc) {
-      var fun = this.sortGenAsc
-      if (vec.typ === 1 || (vec.typ >= 4 && vec.typ <= 9) || (vec.typ >= 12 && vec.typ <= 19)) {
-        fun = this.sortNumAsc
+
+    const sort = Object.assign({}, this.state.sort)
+    const sortAsc = col !== sort.col || !sort.asc
+    var idcs = sort.idcs
+    
+    if (idcs) {
+      for (let i = 0 ; i < src.length ; i++) {
+        dst[i] = [src[idcs[i]], idcs[i]]
       }
-      idcs = dst.sort(fun).map(([_, idx]) => idx)
     }
-    this.setState({sortIdcs: idcs})
+    else {
+      for (let i = 0 ; i < src.length ; i++) {
+        dst[i] = [src[i], i]
+      }
+    }
+
+    var fun = sortAsc ? this.sortGenAsc : this.sortGenDesc
+
+    if (vec.typ === 1 || (vec.typ >= 4 && vec.typ <= 9) || (vec.typ >= 12 && vec.typ <= 19)) {
+      fun = sortAsc ? this.sortNumAsc : this.sortNumDesc
+    }
+
+    idcs = dst.sort(fun).map(([_, idx]) => idx)
+    sort.idcs = idcs
+    sort.asc = sortAsc
+    sort.col = col
+
+    this.setState({sort})
+
   }
 
   renderHeader = (cfg, col, idx) => {
@@ -233,7 +256,7 @@ class Table extends React.PureComponent {
       return <></>
     }
     const cols = this.getColVecPairs()
-    let idcs = this.state.sortIdcs
+    let idcs = this.state.sort.idcs
     idcs = idcs !== null ? idcs : Array.from(Array(tbl.vals.ary[0].count()).keys())
     
     return (

@@ -5,7 +5,7 @@
   --column-width: 10rem;
   --bg-color: white;
   --border-color: lightgray;
-  --header-bg-color: lightgray;
+  --header-bg-color: #ebebeb;
   --header-bottom-border: 2px outset gainsboro;
   --header-font-weight: bold;
   --header-color: black;
@@ -27,21 +27,24 @@
   top: anchor(top);
   right: anchor(right);
   left: calc(ancor(right) - 1px);
-  transform: translate(50%, 0);
+  transform: translate(2px, 0);
+  padding: 0;
+  margin: 0;
   width: 1px;
   overflow: hidden;
   cursor: ew-resize;
+  background-color: transparent;
+  border: none;
+  border-right: 3px groove rgba(192, 192, 192, 0.2);
 }
 .column:hover .headerHandle {
-  background-color: rgba(255, 196, 0, 0.246);
-  width: 1px;
-  max-width: 1px;
+  border-right: 3px groove rgba(192, 192, 192, 1);
 }
 .headerHandle:active {
   height: 100%;
   width: 1px;
-  background-color: rgba(255, 255, 255, 0);
-  border-right: 1px dashed grey;
+  background-color: transparent;
+  border-right: 1px dashed rgba(192, 192, 192, 1);
 }
 .column > DIV {
   white-space: nowrap;
@@ -51,9 +54,10 @@
 }
 .column > DIV:first-child {
   background-color: var(--header-bg-color);
-  border-bottom: var(--header-bottom-border);
+  border:1px outset silver;
   font-weight: var(--header-font-weight);
   color: var(--header-color);
+  cursor: pointer;
 }
 .column > DIV:not(:first-child) {
   border-bottom: var(--cell-bottom-border);

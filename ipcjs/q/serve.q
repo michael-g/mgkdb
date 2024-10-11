@@ -4,8 +4,9 @@
  ;
  }
 
-.web.getTable:{[C]
-  .web.log"In function .web.getTable1"
+.web.getTable:{[C;I;D]
+  .web.log"In function .web.getTable1[",(.Q.s1 C),";",(.Q.s1 I),";",(.Q.s1 D),"]"
+ ;n:100
  ;cls:`bool`byte`short`int`long`real`float`char`sym`timestamp`month`date`timespan`minute`second`time`string
  ;vls:{x?y}[n] each (0b;0x0;0h;0i;0j;99e;99f;" ";`3;.z.P;13h$.z.d;.z.d;.z.n),(17 18 19h$\: .z.t),enlist 3 cut (n * 3) ?  .Q.a,.Q.A,.Q.n
  ;tbl:flip cls!vls
