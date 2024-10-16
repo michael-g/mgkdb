@@ -1,3 +1,18 @@
+/
+This file is part of the Mg KDB-IPC Javascript Library (hereinafter "The Library").
+
+The Library is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+The Library is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero Public License for more details.
+
+You should have received a copy of the GNU Affero Public License along with The
+Library. If not, see https://www.gnu.org/licenses/agpl.txt.
+\
 
 .web.log:{[M]
   -1 (string .z.Z)," ",(string .z.w)," ",M
@@ -11,15 +26,6 @@
  ;cls:`bool`byte`short`int`long`real`float`char`sym`timestamp`month`date`timespan`minute`second`time`string
  ;vls:{x?y}[n] each (0b;0x0;0h;0i;0j;99e;99f;" ";`3;.z.P;13h$.z.d;.z.d;.z.n),(17 18 19h$\: .z.t),enlist 3 cut (n * 3) ?  .Q.a,.Q.A,.Q.n
  ;tbl:flip cls!vls
- ;.web.replyOk[C;.z.w] tbl
- }
-
-.web.getTable1:{[C]
-  .web.log"In function .web.getTable1"
- ;n:1000;
- ;sym:` sv' flip (upper n?`3;`L)
- ;tme:(.z.d+08:00) + n?7 * 60 * 60 * 1000 * 1000 *1000
- ;tbl:`sym`time xasc flip`time`sym`price`size!(tme;sym;n?1000f;768 + n ? 250000)
  ;.web.replyOk[C;.z.w] tbl
  }
 

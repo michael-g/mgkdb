@@ -1,4 +1,18 @@
+/*
+This file is part of the Mg KDB-IPC Javascript Library (hereinafter "The Library").
 
+The Library is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+The Library is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero Public License for more details.
+
+You should have received a copy of the GNU Affero Public License along with The
+Library. If not, see https://www.gnu.org/licenses/agpl.txt.
+*/
 export const MgKdb = {}
 
 MgKdb.chk_guid = function(val) {
@@ -25,8 +39,9 @@ MgKdb.chk_is_int32 = function(val) {
 
 MgKdb.chk_is_bigint = function(val) {
   if (!val) return KdbConstants.NULL_LONG
-  if (typeof(val) !== 'bigint') throw new TypeError("'type")
-  return val
+  if (typeof(val) === 'bigint') return val
+  if (typeof(val) === 'number') return BigInt(val)
+  throw new TypeError("'type")
 }
 
 MgKdb.chk_is_float = function(val) {
@@ -178,7 +193,7 @@ export const KdbTimeUtil = {
       days -= KdbTimeUtil.DAYS_SINCE_EPOCH
       return days
     },
-    argToDateNumber: function(val) {
+    argToDateValue: function(val) {
       if (!val) return KdbConstants.NULL_INT
       if (val.constructor === Number) {
         if (!Number.isInteger(val)) throw new TypeError('Cannot convert non-integer to date value')
@@ -261,7 +276,7 @@ export const KdbTimeUtil = {
     minutesFromJsDate: function(date) {
       return date.getUTCHours() * 60 + date.getUTCMinutes()
     },
-    argToMinuteNumber: function(val) {
+    argToMinuteValue: function(val) {
       if (!val) return KdbConstants.NULL_INT
       if (val.constructor === Number) {
         if (!Number.isInteger(val)) throw new TypeError('Cannot convert non-integer to minute')
@@ -287,7 +302,7 @@ export const KdbTimeUtil = {
     secondsFromJsDate: function(date) {
       return date.getUTCHours() * 60 * 60 + date.getUTCMinutes() * 60 + date.getUTCSeconds()
     },
-    argToSecondNumber: function(val) {
+    argToSecondValue: function(val) {
       if (!val) return KdbConstants.NULL_INT
       if (val.constructor === Number) {
         if (!Number.isInteger(val)) throw new TypeError('Cannot convert non-integer to second')
@@ -320,7 +335,7 @@ export const KdbTimeUtil = {
       time += date.getUTCMilliseconds()
       return time
     },
-    argToTimeNumber: function(val) {
+    argToTimeValue: function(val) {
       if (!val) return KdbConstants.NULL_INT
       if (val.constructor === Number) {
         if (!Number.isInteger(val)) throw new TypeError('Cannot convert non-integer to time')
@@ -556,7 +571,7 @@ export class KdbMonthAtom extends KdbAtom {
 export class KdbDateAtom extends KdbAtom {
 
   constructor(val) {
-    super(-14, KdbTimeUtil.Date.argToDateNumber(val))
+    super(-14, KdbTimeUtil.Date.argToDateValue(val))
   }
 
   getJsObject = cfg => {
@@ -595,7 +610,7 @@ export class KdbTimespanAtom extends KdbAtom {
 
 export class KdbMinuteAtom extends KdbAtom {
   constructor(val) {
-    super(-17, KdbTimeUtil.Minute.argToMinuteNumber(val))
+    super(-17, KdbTimeUtil.Minute.argToMinuteValue(val))
   }
 
   getJsObject = cfg => {
@@ -608,7 +623,7 @@ export class KdbMinuteAtom extends KdbAtom {
 
 export class KdbSecondAtom extends KdbAtom {
   constructor(val) {
-    super(-18, KdbTimeUtil.Second.argToSecondNumber(val))
+    super(-18, KdbTimeUtil.Second.argToSecondValue(val))
   }
 
   getJsObject = cfg => {
@@ -621,7 +636,7 @@ export class KdbSecondAtom extends KdbAtom {
 
 export class KdbTimeAtom extends KdbAtom {
   constructor(val) {
-    super(-19, KdbTimeUtil.Time.argToTimeNumber(val))
+    super(-19, KdbTimeUtil.Time.argToTimeValue(val))
   }
 
   getJsObject = cfg => {
@@ -1701,7 +1716,7 @@ class _KdbWriter {
   writeI32 = val => { this.i32[0] = val; for (let i = 0 ; i < 4 ; i++) this.buf[this.pos++] = this.tmp[i] }
   writeI64 = val => { this.i64[0] = val; for (let i = 0 ; i < 8 ; i++) this.buf[this.pos++] = this.tmp[i] }
   writeF32 = val => { this.f32[0] = val; for (let i = 0 ; i < 4 ; i++) this.buf[this.pos++] = this.tmp[i] }
-  writeF64 = val => { this.f32[0] = val; for (let i = 0 ; i < 8 ; i++) this.buf[this.pos++] = this.tmp[i] }
+  writeF64 = val => { this.f64[0] = val; for (let i = 0 ; i < 8 ; i++) this.buf[this.pos++] = this.tmp[i] }
   writeSym = val => {
     const sym = CdotJS.u8u16(val)
     for (let i = 0 ; i < sym.length ; i++) {
@@ -1770,7 +1785,7 @@ class _KdbWriter {
       case  19:
         return 6 + 4 * elm.ary.length
       case  98:
-        return 3 + this.writeSz(elm.keys) + this.writeSz(elm.vals)
+        return 3 + this.writeSz(elm.cols) + this.writeSz(elm.vals)
       case  99:
         return 1 + this.writeSz(elm.keys) + this.writeSz(elm.vals)
       case 100:
@@ -1842,17 +1857,17 @@ class _KdbWriter {
       case   9:
       case  15:
         return this.writeVec(this.writeF64, elm)
-      case  11: {
+      case  11:
         this.writeVecHdr(elm)
         for (let i = 0 ; i < elm.ary.length ; i++) {
           this.writeSym(elm.ary[i])
         }
-      }
+        return
       case  98: 
         this.writeI8(elm.typ)
         this.writeI8(elm.att)
         this.writeI8(99)
-        this.writeElm(elm.keys)
+        this.writeElm(elm.cols)
         this.writeElm(elm.vals)
         return
       case  99: 
@@ -1966,6 +1981,8 @@ class _KdbTracker {
     this.queryTracker = new Map()
   }
 
+  close = () => this.conn.close()
+
   isConnected = () => this.conn.isConnected
 
   onConnected = conn => {
@@ -2036,7 +2053,7 @@ const newVectorOfTypeLen = function(t, n) {
     case 6: return new KdbIntVector(new Int32Array(n))
     case 7: return new KdbLongVector(new BigInt64Array(n))
     case 8: return new KdbRealVector(new Float32Array(n))
-    case 9: return new KdbFloatAtom(new Float64Array(n))
+    case 9: return new KdbFloatVector(new Float64Array(n))
     case 10: return new KdbCharVector((new Int8Array(n)).fill(0x20, 0, n))
     case 11: return new KdbSymbolVector((new Array(n)).fill('', 0, n))
     case 12: return new KdbTimestampVector(new BigInt64Array(n))
@@ -2051,6 +2068,34 @@ const newVectorOfTypeLen = function(t, n) {
   throw new TypeError(`Type ${t} not supported`)
 }
 
+const inferenceFuncs = {
+  1: a => !!a,
+  4: MgKdb.chk_is_int8,
+  5: MgKdb.chk_is_int16,
+  6: MgKdb.chk_is_int32,
+  7: MgKdb.chk_is_bigint,
+  8: MgKdb.chk_is_float,
+  9: MgKdb.chk_is_float,
+  10: KdbCharVector.i8yFromArg,
+  11: a => a,
+  12: KdbTimeUtil.Timestamp.argToBigIntNanos,
+  13: KdbTimeUtil.Month.argToMonthValue,
+  14: KdbTimeUtil.Date.argToDateValue,
+  16: KdbTimeUtil.Timespan.argToBigIntNanos,
+  17: KdbTimeUtil.Minute.argToMinuteValue,
+  18: KdbTimeUtil.Second.argToSecondValue,
+  19: KdbTimeUtil.Time.argToTimeValue,
+}
+
+const newVectorWithTypeInference = function(t, args) {
+  const vec = newVectorOfTypeLen(t, args.length)
+  const fun = inferenceFuncs[t]
+  if (!fun) throw new TypeError(`Cannot resolve a converions function for type ${t}`)
+  for (let i = 0 ; i < vec.ary.length ; i++) {
+    vec.ary[i] = fun(args[i])
+  }
+  return vec
+}
 
 export const C = {
   kb: b => new KdbBoolAtom(b),
@@ -2071,10 +2116,13 @@ export const C = {
   kt: t => new KdbTimeAtom(t),
 
   kcv: s => new KdbCharVector(s),
+  ksv: (...ary) => new KdbSymbolVector(ary),
+  ktn: (t, n) => newVectorOfTypeLen(t, n),
+  kva: (...args) => new KdbList(args),
+  ktv: (t, ...args) => newVectorWithTypeInference(t, args),
+
   xD: (k, v) => new KdbDict(k, v),
   xT: (k, v) => new KdbTable(k, v),
-  ktn: (t, n) => newVectorOfTypeLen(t, n),
-  knk: (...args) => new KdbList(args)
 }
 
 const CdotJS = {}
