@@ -6,39 +6,39 @@ MgKdb.chk_guid = function(val) {
 }
 
 MgKdb.chk_is_int8 = function(val) {
-  if (val === undefined || val === null) return 0
+  if (!val) return 0
   if (!Number.isInteger(val)) throw new TypeError("'type")
   return val
 }
 
 MgKdb.chk_is_int16 = function(val) {
-  if (val === undefined || val === null) return KdbConstants.NULL_SHORT
+  if (!val) return KdbConstants.NULL_SHORT
   if (!Number.isInteger(val)) throw new TypeError("'type")
   return val
 }
 
 MgKdb.chk_is_int32 = function(val) {
-  if (val === undefined || val === null) return KdbConstants.NULL_INT
+  if (!val) return KdbConstants.NULL_INT
   if (!Number.isInteger(val)) throw new TypeError("'type")
   return val
 }
 
 MgKdb.chk_is_bigint = function(val) {
-  if (val === undefined || val === null) return KdbConstants.NULL_LONG
+  if (!val) return KdbConstants.NULL_LONG
   if (typeof(val) !== 'bigint') throw new TypeError("'type")
   return val
 }
 
 MgKdb.chk_is_float = function(val) {
-  if (val === undefined || val === null || isNaN(val)) return NaN
-  if (typeof(val) === 'number') return val
-  throw new TypeError("'type")
+  if (!val) return NaN
+  if (typeof(val) !== 'number') throw new TypeError("'type")
+  return val
 }
 
 MgKdb.chk_is_string = function(val) {
-  if (val === undefined || val === null) return ''
-  if (typeof(val) === 'string') return val
-  throw new TypeError("'type")
+  if (!val) return ''
+  if (typeof(val) !== 'string') throw new TypeError("'type")
+  return val
 }
 
 MgKdb.int_to_0N_str = function(val, cfg, char) {
@@ -144,7 +144,7 @@ export const KdbTimeUtil = {
 
   Month: {
     monthsFromJsDate: function(date) {
-      return date.getFullYear() - 2000 + date.getMonths()
+      return date.getFullYear() - 2000 + date.getMonth()
     },
     argToMonthValue: function(val) {
       if (!val) return KdbConstants.NULL_INT
@@ -222,16 +222,16 @@ export const KdbTimeUtil = {
   Timespan: {
     nanosFromJsDate: function(val) {
       var time
-      time = val.getHours() * KdbConstants.MILLIS_IN_HOUR
-      time += val.getMinutes() * KdbConstants.MILLIS_IN_MINUTE
-      time += val.getSeconds() * KdbConstants.MILLIS_IN_SECOND
-      time += val.getMillis()
+      time =  val.getUTCHours() * KdbTimeUtil.MILLIS_IN_HOUR
+      time += val.getUTCMinutes() * KdbTimeUtil.MILLIS_IN_MINUTE
+      time += val.getUTCSeconds() * KdbTimeUtil.MILLIS_IN_SECOND
+      time += val.getUTCMilliseconds()
       return BigInt(time) * 1000000n
     },
     argToBigIntNanos: function(val) {
       if (!val) return KdbConstants.NULL_LONG
       if (val.constructor === BigInt) return val
-      if (val.constructor === Date) return KdbTimeUtil.Timestamp.nanosFromJsDate(val)
+      if (val.constructor === Date) return KdbTimeUtil.Timespan.nanosFromJsDate(val)
       throw new TypeError(`Cannot convert ${val.constructor.name} to timespan nanos`)
     },
     toJsDate: function(nanos) {
@@ -259,7 +259,7 @@ export const KdbTimeUtil = {
 
   Minute: {
     minutesFromJsDate: function(date) {
-      return date.getHours() * 60 + date.getMinutes()
+      return date.getUTCHours() * 60 + date.getUTCMinutes()
     },
     argToMinuteNumber: function(val) {
       if (!val) return KdbConstants.NULL_INT
@@ -285,7 +285,7 @@ export const KdbTimeUtil = {
 
   Second: {
     secondsFromJsDate: function(date) {
-      return date.getHours() * 60 * 60 + date.getMinutes() * 60 + date.getSeconds()
+      return date.getUTCHours() * 60 * 60 + date.getUTCMinutes() * 60 + date.getUTCSeconds()
     },
     argToSecondNumber: function(val) {
       if (!val) return KdbConstants.NULL_INT
@@ -2062,15 +2062,17 @@ export const C = {
   kf: f => new KdbFloatAtom(f),
   kc: c => new KdbCharAtom(c),
   ks: s => new KdbSymbolAtom(s),
-  kp: s => new KdbCharVector(s),
-  ktp: j => new KdbTimestampAtom(j),
+  kp: j => new KdbTimestampAtom(j),
   km: m => new KdbMonthAtom(m),
   kd: d => new KdbDateAtom(d), 
   kn: j => new KdbTimespanAtom(j),
-  ktu: u => new KdbMinuteAtom(u),
-  ktv: v => new KdbSecondAtom(v),
+  ku: u => new KdbMinuteAtom(u),
+  kv: v => new KdbSecondAtom(v),
   kt: t => new KdbTimeAtom(t),
 
+  kcv: s => new KdbCharVector(s),
+  xD: (k, v) => new KdbDict(k, v),
+  xT: (k, v) => new KdbTable(k, v),
   ktn: (t, n) => newVectorOfTypeLen(t, n),
   knk: (...args) => new KdbList(args)
 }

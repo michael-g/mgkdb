@@ -28,18 +28,30 @@ export default class AppRoot extends React.Component {
   }
   kdbConnected = conn => {
     this.setState({connected: true})
+    const now = new Date()
     var request
-    if (Date.now() % 2) {
+    if (now.getTime() % 2) {
       var func = new Mg.KdbCharVector(".web.getTable")
-      var arg0 = new Mg.KdbTimeAtom(new Date())
-      var arg1 = new Mg.KdbTimestampAtom(new Date())
-      request = new Mg.KdbList([func, arg0, arg1])
+      var timestamp = new Mg.KdbTimestampAtom(now)
+      var month = new Mg.KdbMonthAtom(now)
+      var date = new Mg.KdbDateAtom(now)
+      var timespan = new Mg.KdbTimespanAtom(now)
+      var minute = new Mg.KdbMinuteAtom(now)
+      var second = new Mg.KdbSecondAtom(now)
+      var time = new Mg.KdbTimeAtom(now)
+      var arg0 = new Mg.KdbList([timestamp, month, date, timespan, minute, second, time])
+      request = new Mg.KdbList([func, arg0])
     }
     else {
       var fun = C.ks(".web.getTable")
-      var arg0 = C.kt(new Date())
-      var arg1 = C.ktp(new Date())
-      request = C.knk(fun, arg0, arg1)
+      var timestamp = C.kp(now)
+      var month = C.km(now)
+      var date = C.kd(now)
+      var timespan = C.kn(now)
+      var minute = C.ku(now)
+      var second = C.kv(now)
+      var time = C.kt(now)
+      request = C.knk(fun, C.knk(timestamp, month, date, timespan, minute, second, time))
     }
     this.conn.sendRequest(request, this.onTableResponse)
   }

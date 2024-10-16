@@ -4,8 +4,9 @@
  ;
  }
 
-.web.getTable:{[C;I;D]
-  .web.log"In function .web.getTable1[",(.Q.s1 C),";",(.Q.s1 I),";",(.Q.s1 D),"]"
+.web.getTable:{[C;L]
+  .web.log"In function .web.getTable1[",(.Q.s1 C),";",(.Q.s1 L),"]"
+ ;`.web.msgs insert (.z.P;`.web.getTable;`C`L!(C;L))
  ;n:100
  ;cls:`bool`byte`short`int`long`real`float`char`sym`timestamp`month`date`timespan`minute`second`time`string
  ;vls:{x?y}[n] each (0b;0x0;0h;0i;0j;99e;99f;" ";`3;.z.P;13h$.z.d;.z.d;.z.n),(17 18 19h$\: .z.t),enlist 3 cut (n * 3) ?  .Q.a,.Q.A,.Q.n
@@ -44,7 +45,7 @@
 .web.init:{
   .h.HOME:(getenv`HOME),"/dev/projects/github.com/mgkdb/ipcjs/static"
  ;.z.ws:.web.zws
- ;
+ ;.web.msgs:flip`time`fun`args!enlist each (0Np;`;::)
  }
 
 .web.send:{[V]
