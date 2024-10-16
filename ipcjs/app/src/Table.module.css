@@ -1,0 +1,85 @@
+/*
+This file is part of the Mg KDB-IPC Javascript Library (hereinafter "The Library").
+
+The Library is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+The Library is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero Public License for more details.
+
+You should have received a copy of the GNU Affero Public License along with The
+Library. If not, see https://www.gnu.org/licenses/agpl.txt.
+*/
+.table {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  --column-width: 10rem;
+  --bg-color: white;
+  --border-color: lightgray;
+  --header-bg-color: #ebebeb;
+  --header-bottom-border: 2px outset gainsboro;
+  --header-font-weight: bold;
+  --header-color: black;
+  --cell-bottom-border: 1px solid lightgray;
+
+  background-color: var(--bg-color);
+}
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  border-right: 1px solid lightgray;
+  width: var(--column-width);
+  max-width: var(--column-width);
+  min-width: var(--column-width);
+}
+.headerHandle {
+  position: absolute;
+  top: anchor(top);
+  right: anchor(right);
+  left: calc(ancor(right) - 1px);
+  transform: translate(2px, 0);
+  padding: 0;
+  margin: 0;
+  width: 1px;
+  overflow: hidden;
+  cursor: ew-resize;
+  background-color: transparent;
+  border: none;
+  border-right: 3px groove rgba(192, 192, 192, 0.2);
+}
+.column:hover .headerHandle {
+  border-right: 3px groove rgba(192, 192, 192, 1);
+}
+.headerHandle:active {
+  height: 100%;
+  width: 1px;
+  background-color: transparent;
+  border-right: 1px dashed rgba(192, 192, 192, 1);
+}
+.column > DIV {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  padding: 0 0.2rem;
+}
+.column > DIV:first-child {
+  background-color: var(--header-bg-color);
+  border:1px outset silver;
+  font-weight: var(--header-font-weight);
+  color: var(--header-color);
+  cursor: pointer;
+}
+.column > DIV:not(:first-child) {
+  border-bottom: var(--cell-bottom-border);
+}
+.integer {
+  text-align: right;
+}
+.fraction {
+  text-align: right;
+}
