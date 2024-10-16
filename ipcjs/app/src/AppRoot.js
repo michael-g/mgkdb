@@ -1,6 +1,7 @@
 import React from 'react'
 import Table from './Table'
 import * as Mg from './kdb/ipc'
+import { C } from './kdb/ipc'
 
 
 export default class AppRoot extends React.Component {
@@ -27,10 +28,19 @@ export default class AppRoot extends React.Component {
   }
   kdbConnected = conn => {
     this.setState({connected: true})
-    var func = Mg.KdbCharVector.fromString(".web.getTable")
-    var arg0 = new Mg.KdbTimeAtom(new Date())
-    var arg1 = new Mg.KdbTimestampAtom(new Date())
-    var request = new Mg.KdbList([func, arg0, arg1])
+    var request
+    if (Date.now() % 2) {
+      var func = new Mg.KdbCharVector(".web.getTable")
+      var arg0 = new Mg.KdbTimeAtom(new Date())
+      var arg1 = new Mg.KdbTimestampAtom(new Date())
+      request = new Mg.KdbList([func, arg0, arg1])
+    }
+    else {
+      var fun = C.ks(".web.getTable")
+      var arg0 = C.kt(new Date())
+      var arg1 = C.ktp(new Date())
+      request = C.knk(fun, arg0, arg1)
+    }
     this.conn.sendRequest(request, this.onTableResponse)
   }
   kdbDisconnected = conn => {

@@ -866,20 +866,38 @@ export class KdbFloatVector extends KdbVector {
 }
 
 export class KdbCharVector extends KdbVector {
-  static fromString = function(str) {
+  static i8yFromString = function(str) {
     str = CdotJS.u8u16(str)
     const len = str.length
     const ary = new Int8Array(len)
     for (let i = 0 ; i < len ; i++) {
       ary[i] = str[i]
     }
-    const vec = new KdbCharVector(ary, 0)
-    vec.string = str
-    return vec
+    return ary
+  }
+
+  static i8yFromArray = function (ary) {
+    var dst = []
+    for (let i = 0 ; i < ary.length ; i++) {
+      dst = dst.concat(CdotJS.u8u16(ary[i]))
+    }
+    const i8y = new Int8Array(dst.length)
+    for (let i = 0 ; i < dst.length ; i++) {
+      i8y[i] = dst[i]
+    }
+    return i8y
+  }
+
+  static i8yFromArg(arg) {
+    if (!arg) throw new TypeError("Array cannot be null or undefined")
+    if (arg.constructor === Int8Array) return arg
+    if (arg.constructor === String) return KdbCharVector.i8yFromString(arg)
+    if (arg.constructor === Array) return KdbCharVector.i8yFromArray(arg)
+    throw new TypeError(`Cannot create KdbCharVector from ${arg.constructor.name}`)
   }
 
   constructor(ary, att) {
-    super(10, ary, att)
+    super(10, KdbCharVector.i8yFromArg(ary), att)
     this.string = null
   }
 
@@ -2008,6 +2026,54 @@ class _KdbTracker {
 }
 
 MgKdb.Endpoint = _KdbTracker
+
+const newVectorOfTypeLen = function(t, n) {
+  switch (t) {
+    case 1: return new KdbBoolVector(new Int8Array(n))
+    case 2: break
+    case 4: return new KdbByteVector(new Int8Array(n))
+    case 5: return new KdbShortVector(new Int16Array(n))
+    case 6: return new KdbIntVector(new Int32Array(n))
+    case 7: return new KdbLongVector(new BigInt64Array(n))
+    case 8: return new KdbRealVector(new Float32Array(n))
+    case 9: return new KdbFloatAtom(new Float64Array(n))
+    case 10: return new KdbCharVector((new Int8Array(n)).fill(0x20, 0, n))
+    case 11: return new KdbSymbolVector((new Array(n)).fill('', 0, n))
+    case 12: return new KdbTimestampVector(new BigInt64Array(n))
+    case 13: return new KdbMonthVector(new Int32Array(n))
+    case 14: return new KdbDateVector(new Int32Array(n))
+    case 15: break
+    case 16: return new KdbTimestampVector(new BigInt64Array(n))
+    case 17: return new KdbMinuteVector(new Int32Array(n))
+    case 18: return new KdbSecondVector(new Int32Array(n))
+    case 19: return new KdbTimeVector(new Int32Array(n))
+  }
+  throw new TypeError(`Type ${t} not supported`)
+}
+
+
+export const C = {
+  kb: b => new KdbBoolAtom(b),
+  kg: x => new KdbByteAtom(x),
+  kh: h => new KdbShortAtom(h),
+  ki: i => new KdbIntAtom(i),
+  kj: j => new KdbLongAtom(j),
+  ke: e => new KdbRealAtom(e),
+  kf: f => new KdbFloatAtom(f),
+  kc: c => new KdbCharAtom(c),
+  ks: s => new KdbSymbolAtom(s),
+  kp: s => new KdbCharVector(s),
+  ktp: j => new KdbTimestampAtom(j),
+  km: m => new KdbMonthAtom(m),
+  kd: d => new KdbDateAtom(d), 
+  kn: j => new KdbTimespanAtom(j),
+  ktu: u => new KdbMinuteAtom(u),
+  ktv: v => new KdbSecondAtom(v),
+  kt: t => new KdbTimeAtom(t),
+
+  ktn: (t, n) => newVectorOfTypeLen(t, n),
+  knk: (...args) => new KdbList(args)
+}
 
 const CdotJS = {}
 
