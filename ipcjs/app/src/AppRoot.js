@@ -17,7 +17,7 @@ export default class AppRoot extends React.Component {
       onConnected: this.kdbConnected,
       onDisconnected: this.kdbDisconnected,
     }
-    this.conn = new Mg.MgKdb.Connection('ws://localhost:30098', this.listener)
+    this.conn = new Mg.MgKdb.Endpoint('ws://localhost:30098', this.listener)
   }
   componentWillUnmount = () => {
     this.conn.close()
@@ -28,8 +28,8 @@ export default class AppRoot extends React.Component {
   kdbConnected = conn => {
     this.setState({connected: true})
     var func = Mg.KdbCharVector.fromString(".web.getTable")
-    var arg0 = Mg.KdbTimeUtil.Time.atomFromJsDate(new Date())
-    var arg1 = Mg.KdbTimeUtil.Timestamp.atomFromJsDate(new Date())
+    var arg0 = new Mg.KdbTimeAtom(new Date())
+    var arg1 = new Mg.KdbTimestampAtom(new Date())
     var request = new Mg.KdbList([func, arg0, arg1])
     this.conn.sendRequest(request, this.onTableResponse)
   }

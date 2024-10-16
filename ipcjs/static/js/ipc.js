@@ -99,9 +99,16 @@ export const KdbTimeUtil = {
 
   Timestamp: {
     nanosFromJsDate: function(date) {
-      var nanos = BigInt(date.getTime() - KdbTimeUtil.MILLIS_SINCE_EPOCH)
+      let nanos = BigInt(date.getTime() - KdbTimeUtil.MILLIS_SINCE_EPOCH)
       nanos *= 1000000n
       return nanos
+    },
+    argToBigIntNanos: function(val) {
+      if (!val) return KdbConstants.NULL_LONG
+      if (val.constructor === BigInt) return val
+      if (val.constructor === Number) return BigInt(val)
+      if (val.constructor === Date) return KdbTimeUtil.Timestamp.nanosFromJsDate(val)
+      throw new TypeError(`Cannot convert ${val.constructor.name} to timestamp nanos`)
     },
     atomFromJsDate: function(date) {
       const nanos = KdbTimeUtil.Timestamp.nanosFromJsDate(date)
@@ -136,6 +143,18 @@ export const KdbTimeUtil = {
   },
 
   Month: {
+    monthsFromJsDate: function(date) {
+      return date.getFullYear() - 2000 + date.getMonths()
+    },
+    argToMonthValue: function(val) {
+      if (!val) return KdbConstants.NULL_INT
+      if (val.constructor === Number) {
+        if (!Number.isInteger(val)) throw new TypeError('Cannot convert non-integer to month value')
+        return val
+      }
+      if (val.constructor === Date) return KdbTimeUtil.Month.monthsFromJsDate(val)
+      throw new TypeError(`Cannot convert ${val.constructor.name} to month`)
+    },
     toJsDate: function(months) {
       const y = 2000 + Math.floor(months / 12)
       const m = months % 12
@@ -158,6 +177,15 @@ export const KdbTimeUtil = {
       var days = Math.floor(date.getTime() / KdbTimeUtil.MILLIS_IN_DAY)
       days -= KdbTimeUtil.DAYS_SINCE_EPOCH
       return days
+    },
+    argToDateNumber: function(val) {
+      if (!val) return KdbConstants.NULL_INT
+      if (val.constructor === Number) {
+        if (!Number.isInteger(val)) throw new TypeError('Cannot convert non-integer to date value')
+        return val
+      }
+      if (val.constructor === Date) return KdbTimeUtil.Date.daysFromJsDate(val)
+      throw new TypeError(`Cannot convert ${val.constructor.name} to date`)
     },
     atomFromJsDate: function(date) {
       return new KdbDateAtom(KdbTimeUtil.Date.daysFromJsDate(date))
@@ -192,6 +220,20 @@ export const KdbTimeUtil = {
   },
 
   Timespan: {
+    nanosFromJsDate: function(val) {
+      var time
+      time = val.getHours() * KdbConstants.MILLIS_IN_HOUR
+      time += val.getMinutes() * KdbConstants.MILLIS_IN_MINUTE
+      time += val.getSeconds() * KdbConstants.MILLIS_IN_SECOND
+      time += val.getMillis()
+      return BigInt(time) * 1000000n
+    },
+    argToBigIntNanos: function(val) {
+      if (!val) return KdbConstants.NULL_LONG
+      if (val.constructor === BigInt) return val
+      if (val.constructor === Date) return KdbTimeUtil.Timestamp.nanosFromJsDate(val)
+      throw new TypeError(`Cannot convert ${val.constructor.name} to timespan nanos`)
+    },
     toJsDate: function(nanos) {
       return new Date(Number(nanos / 1000000n))
     },
@@ -216,6 +258,18 @@ export const KdbTimeUtil = {
   },
 
   Minute: {
+    minutesFromJsDate: function(date) {
+      return date.getHours() * 60 + date.getMinutes()
+    },
+    argToMinuteNumber: function(val) {
+      if (!val) return KdbConstants.NULL_INT
+      if (val.constructor === Number) {
+        if (!Number.isInteger(val)) throw new TypeError('Cannot convert non-integer to minute')
+        return val
+      }
+      if (val.constructor === Date) return KdbTimeUtil.Minute.minutesFromJsDate(val)
+      throw new TypeError(`Cannot convert ${val.constructor.name} to minutes`)
+    },
     toJsDate: function(mins) {
       return new Date(mins * 60 * 1000)
     },
@@ -230,6 +284,18 @@ export const KdbTimeUtil = {
   },
 
   Second: {
+    secondsFromJsDate: function(date) {
+      return date.getHours() * 60 * 60 + date.getMinutes() * 60 + date.getSeconds()
+    },
+    argToSecondNumber: function(val) {
+      if (!val) return KdbConstants.NULL_INT
+      if (val.constructor === Number) {
+        if (!Number.isInteger(val)) throw new TypeError('Cannot convert non-integer to second')
+        return val
+      }
+      if (val.constructor === Date) return KdbTimeUtil.Second.secondsFromJsDate(val)
+      throw new TypeError(`Cannot convert ${val.constructor.name} to seconds`)
+    },
     toJsDate: function(secs) {
       return new Date(secs * 1000)
     },
@@ -253,6 +319,15 @@ export const KdbTimeUtil = {
       time += date.getUTCSeconds() * KdbTimeUtil.MILLIS_IN_SECOND
       time += date.getUTCMilliseconds()
       return time
+    },
+    argToTimeNumber: function(val) {
+      if (!val) return KdbConstants.NULL_INT
+      if (val.constructor === Number) {
+        if (!Number.isInteger(val)) throw new TypeError('Cannot convert non-integer to time')
+        return val
+      }
+      if (val.constructor === Date) return KdbTimeUtil.Time.millisFromJsDate(val)
+      throw new TypeError(`Cannot convert ${val.constructor.name} to millis`)
     },
     atomFromJsDate: function(date) {
       return new KdbTimeAtom(KdbTimeUtil.Time.millisFromJsDate(date))
@@ -452,8 +527,9 @@ export class KdbSymbolAtom extends KdbAtom {
 }
 
 export class KdbTimestampAtom extends KdbAtom {
+
   constructor(val) {
-    super(-12, MgKdb.chk_is_bigint(val))
+    super(-12, KdbTimeUtil.Timestamp.argToBigIntNanos(val))
   }
 
   getJsObject = cfg => {
@@ -466,7 +542,7 @@ export class KdbTimestampAtom extends KdbAtom {
 
 export class KdbMonthAtom extends KdbAtom {
   constructor(val) {
-    super(-13, MgKdb.chk_is_int32(val))
+    super(-13, KdbTimeUtil.Month.argToMonthValue(val))
   }
 
   getJsObject = cfg => {
@@ -480,7 +556,7 @@ export class KdbMonthAtom extends KdbAtom {
 export class KdbDateAtom extends KdbAtom {
 
   constructor(val) {
-    super(-14, MgKdb.chk_is_int32(val))
+    super(-14, KdbTimeUtil.Date.argToDateNumber(val))
   }
 
   getJsObject = cfg => {
@@ -506,7 +582,7 @@ export class KdbDateTimeAtom extends KdbAtom {
 
 export class KdbTimespanAtom extends KdbAtom {
   constructor(val) {
-    super(-16, MgKdb.chk_is_bigint(val))
+    super(-16, KdbTimeUtil.Timespan.argToBigIntNanos(val))
   }
 
   getJsObject = cfg => {
@@ -519,7 +595,7 @@ export class KdbTimespanAtom extends KdbAtom {
 
 export class KdbMinuteAtom extends KdbAtom {
   constructor(val) {
-    super(-17, MgKdb.chk_is_int32(val))
+    super(-17, KdbTimeUtil.Minute.argToMinuteNumber(val))
   }
 
   getJsObject = cfg => {
@@ -532,7 +608,7 @@ export class KdbMinuteAtom extends KdbAtom {
 
 export class KdbSecondAtom extends KdbAtom {
   constructor(val) {
-    super(-18, MgKdb.chk_is_int32(val))
+    super(-18, KdbTimeUtil.Second.argToSecondNumber(val))
   }
 
   getJsObject = cfg => {
@@ -545,7 +621,7 @@ export class KdbSecondAtom extends KdbAtom {
 
 export class KdbTimeAtom extends KdbAtom {
   constructor(val) {
-    super(-19, MgKdb.chk_is_int32(val))
+    super(-19, KdbTimeUtil.Time.argToTimeNumber(val))
   }
 
   getJsObject = cfg => {
@@ -797,7 +873,9 @@ export class KdbCharVector extends KdbVector {
     for (let i = 0 ; i < len ; i++) {
       ary[i] = str[i]
     }
-    return new KdbCharVector(ary)
+    const vec = new KdbCharVector(ary, 0)
+    vec.string = str
+    return vec
   }
 
   constructor(ary, att) {
@@ -1821,34 +1899,12 @@ class _MgWs {
     this.ws.onmessage = this._wsMsg
     this.isConnected = false
     this.listener = cbk
-    this.queryId = 0
-    this.queryTracker = new Map()
-  }
-  sendRequest = (msg, cbk) => {
-    if (!this.isConnected) {
-      throw new Error("Not connected")
-    }
-    if (typeof(cbk) !== 'function') {
-      throw new TypeError("Callback must be a function")
-    }
-    const hdr = new KdbSymbolAtom('.web.request')
-    const qid = new KdbIntAtom(this.queryId++)
-    if (msg.constructor === Array) {
-      msg = new KdbList(msg.toSpliced(1, 0, qid))
-    }
-    else if (msg.constructor === KdbList) {
-      msg.ary = msg.ary.toSpliced(1, 0, qid)
-    }
-    const req = new KdbList([hdr, msg])
-    const buf = MgKdb.serialize(KdbMsgTyp.SYNC, req)
-    this.ws.send(buf)
-    this.queryTracker.set(qid.val, cbk)
-  }
-  sendMessage = msg => {
-
   }
   close = () => {
     this.ws.close()
+  }
+  send = buf => {
+    return this.ws.send(buf)
   }
   _wsOpened = evt => { // evt: generic Event
     this.isConnected = true
@@ -1874,9 +1930,41 @@ class _MgWs {
     const obj = MgKdb.deserialize(evt.data)
     // console.log("Deserialized message: ", obj.msg.toString(), obj.msg)
     console.log("Deserialised message of type %d", obj.msg.typ)
-    if (KdbMsgTyp.ASYNC === obj.typ) {
-      // assume response like (`.web.response;qryId;isError;data)
-      const msg = obj.msg
+    if (typeof(this.listener.onData) === 'function') {
+      this.listener.onData(this, obj.typ, obj.msg)
+    }
+  }
+
+}
+
+MgKdb.Connection = _MgWs
+
+class _KdbTracker {
+
+  constructor(url, listener) {
+    this.listener = listener
+    this.conn = new _MgWs(url, this)
+    this.queryId = 0
+    this.queryTracker = new Map()
+  }
+
+  isConnected = () => this.conn.isConnected
+
+  onConnected = conn => {
+    if (typeof(this.listener.onConnected) === 'function') {
+      this.listener.onConnected(this)
+    }
+  }
+
+  onDisconnected = conn => { 
+    if (typeof(this.listener.onDisconnected) === 'function') {
+      this.listener.onDisconnected(this)
+    }
+  }
+
+  onData = (conn, msgType, msg) => {
+    if (KdbMsgTyp.ASYNC === msgType) {
+      // looking for response like (`.web.response;qryId;isError;data)
       if (msg.constructor === KdbList && msg.count() === 4 &&
           msg.ary[0].constructor === KdbSymbolAtom && msg.ary[0].val === '.web.response' &&
           msg.ary[1].constructor === KdbIntAtom && 
@@ -1887,16 +1975,39 @@ class _MgWs {
           this.queryTracker.delete(qid.val)
           cbk(isErr, data)
         }
+        else {
+          console.warn("WARN: no response-handler registered for query ID %d", qid,val)
+        }
       }
       else {
         console.warn("WARN: dropped response: ", msg)
       }
-    } // if-is-response
+    } // if-(is-async)
   }
 
+  sendRequest = (msg, cbk) => {
+    if (!this.conn.isConnected) {
+      throw new Error("Not connected")
+    }
+    if (typeof(cbk) !== 'function') {
+      throw new TypeError("Callback must be a function")
+    }
+    const hdr = new KdbSymbolAtom('.web.request')
+    const qid = new KdbIntAtom(this.queryId++)
+    if (msg.constructor === Array) {
+      msg = new KdbList(msg.toSpliced(1, 0, qid))
+    }
+    else if (msg.constructor === KdbList) {
+      msg.ary = msg.ary.toSpliced(1, 0, qid)
+    }
+    const req = new KdbList([hdr, msg])
+    const buf = MgKdb.serialize(KdbMsgTyp.SYNC, req)
+    this.conn.send(buf)
+    this.queryTracker.set(qid.val, cbk)
+  }
 }
 
-MgKdb.Connection = _MgWs
+MgKdb.Endpoint = _KdbTracker
 
 const CdotJS = {}
 
