@@ -15,8 +15,11 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 */
 import React from 'react'
 import Table from './Table'
-import * as Mg from './kdb/ipc'
-import { C } from './kdb/ipc'
+import { MgKdb, C, } from './kdb/ipc'
+import {
+  KdbCharVector, KdbTimestampAtom, KdbMonthAtom, KdbDateAtom, KdbTimespanAtom, 
+  KdbMinuteAtom, KdbSecondAtom, KdbTimeAtom, KdbList
+} from './kdb/ipc'
 
 
 export default class AppRoot extends React.Component {
@@ -33,7 +36,7 @@ export default class AppRoot extends React.Component {
       onConnected: this.kdbConnected,
       onDisconnected: this.kdbDisconnected,
     }
-    this.conn = new Mg.MgKdb.Endpoint('ws://localhost:30098', this.listener)
+    this.conn = new MgKdb.Endpoint('ws://localhost:30098', this.listener)
   }
   componentWillUnmount = () => {
     this.conn.close()
@@ -46,16 +49,16 @@ export default class AppRoot extends React.Component {
     const now = new Date()
     var request
     if (false) {
-      var func = new Mg.KdbCharVector(".web.getTable")
-      var timestamp = new Mg.KdbTimestampAtom(now)
-      var month = new Mg.KdbMonthAtom(now)
-      var date = new Mg.KdbDateAtom(now)
-      var timespan = new Mg.KdbTimespanAtom(now)
-      var minute = new Mg.KdbMinuteAtom(now)
-      var second = new Mg.KdbSecondAtom(now)
-      var millis = new Mg.KdbTimeAtom(now)
-      var arg0 = new Mg.KdbList([timestamp, month, date, timespan, minute, second, millis])
-      request = new Mg.KdbList([func, arg0])
+      var func = new KdbCharVector(".web.getTable")
+      var timestamp = new KdbTimestampAtom(now)
+      var month = new KdbMonthAtom(now)
+      var date = new KdbDateAtom(now)
+      var timespan = new KdbTimespanAtom(now)
+      var minute = new KdbMinuteAtom(now)
+      var second = new KdbSecondAtom(now)
+      var millis = new KdbTimeAtom(now)
+      var arg0 = new KdbList([timestamp, month, date, timespan, minute, second, millis])
+      request = new KdbList([func, arg0])
     }
     else {
       var fun = C.ks(".web.getTable")
