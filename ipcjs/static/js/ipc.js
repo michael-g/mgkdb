@@ -448,6 +448,7 @@ export class KdbShortAtom extends KdbAtom {
 export class KdbIntAtom extends KdbAtom {
   constructor(val) {
     super(-6, MgKdb.chk_is_int32(val))
+    console.log("Created KdbIntAtom with value %d", this.val)
   }
 
   getJsObject = cfg => {
@@ -1375,6 +1376,15 @@ export class KdbProjection extends KdbType {
   }
 }
 
+export class KdbException extends KdbType {
+  constructor(msg) {
+    super(-128)
+    this.val = msg
+  }
+  getMsg = () => this.val
+  toString = () => `'${this.val}`
+}
+
 
 class _KdbReader {
   constructor(aryBuf) {
@@ -1493,6 +1503,9 @@ class _KdbReader {
   }
   readTimeAtom = () => {
     return new KdbTimeAtom(this.readI32())
+  }
+  readException = () => {
+    return new KdbException(this.readSym())
   }
 
   readList = () => {
@@ -1647,50 +1660,51 @@ class _KdbReader {
   read = () => {
     let typ = this.i8y[this.pos++]
     switch (typ) {
-      case -19: return this.readTimeAtom()
-      case -18: return this.readSecondAtom()
-      case -17: return this.readMinuteAtom()
-      case -16: return this.readTimespanAtom()
-      case -15: return this.readDateTimeAtom()
-      case -14: return this.readDateAtom()
-      case -13: return this.readMonthAtom()
-      case -12: return this.readTimestampAtom()
-      case -11: return this.readSymbolAtom()
-      case -10: return this.readCharAtom()
-      case  -9: return this.readFloatAtom()
-      case  -8: return this.readRealAtom()
-      case  -7: return this.readLongAtom()
-      case  -6: return this.readIntAtom()
-      case  -5: return this.readShortAtom()
-      case  -4: return this.readByteAtom()
-      case  -2: return this.readGuidAtom()
-      case  -1: return this.readBoolAtom()
-      case   0: return this.readList()
-      case   1: return this.readBoolVector()
-      case   2: return this.readGuidVector()
-      case   4: return this.readByteVector()
-      case   5: return this.readShortVector()
-      case   6: return this.readIntVector()
-      case   7: return this.readLongVector()
-      case   8: return this.readRealVector()
-      case   9: return this.readFloatVector()
-      case  10: return this.readCharVector()
-      case  11: return this.readSymbolVector()
-      case  12: return this.readTimestampVector()
-      case  13: return this.readMonthVector()
-      case  14: return this.readDateVector()
-      case  15: return this.readDateTimeVector()
-      case  16: return this.readTimespanVector()
-      case  17: return this.readMinuteVector()
-      case  18: return this.readSecondVector()
-      case  19: return this.readTimeVector()
-      case  98: return this.readTable()
-      case  99: return this.readDict()
-      case 100: return this.readFunction()
-      case 101: return this.readUnary()
-      case 102: return this.readBinary()
-      case 103: return this.readTernary()
-      case 104: return this.readProjection()
+      case -128: return this.readException()
+      case  -19: return this.readTimeAtom()
+      case  -18: return this.readSecondAtom()
+      case  -17: return this.readMinuteAtom()
+      case  -16: return this.readTimespanAtom()
+      case  -15: return this.readDateTimeAtom()
+      case  -14: return this.readDateAtom()
+      case  -13: return this.readMonthAtom()
+      case  -12: return this.readTimestampAtom()
+      case  -11: return this.readSymbolAtom()
+      case  -10: return this.readCharAtom()
+      case   -9: return this.readFloatAtom()
+      case   -8: return this.readRealAtom()
+      case   -7: return this.readLongAtom()
+      case   -6: return this.readIntAtom()
+      case   -5: return this.readShortAtom()
+      case   -4: return this.readByteAtom()
+      case   -2: return this.readGuidAtom()
+      case   -1: return this.readBoolAtom()
+      case    0: return this.readList()
+      case    1: return this.readBoolVector()
+      case    2: return this.readGuidVector()
+      case    4: return this.readByteVector()
+      case    5: return this.readShortVector()
+      case    6: return this.readIntVector()
+      case    7: return this.readLongVector()
+      case    8: return this.readRealVector()
+      case    9: return this.readFloatVector()
+      case   10: return this.readCharVector()
+      case   11: return this.readSymbolVector()
+      case   12: return this.readTimestampVector()
+      case   13: return this.readMonthVector()
+      case   14: return this.readDateVector()
+      case   15: return this.readDateTimeVector()
+      case   16: return this.readTimespanVector()
+      case   17: return this.readMinuteVector()
+      case   18: return this.readSecondVector()
+      case   19: return this.readTimeVector()
+      case   98: return this.readTable()
+      case   99: return this.readDict()
+      case  100: return this.readFunction()
+      case  101: return this.readUnary()
+      case  102: return this.readBinary()
+      case  103: return this.readTernary()
+      case  104: return this.readProjection()
       default:
         throw new Error("'nyi: " + typ)
     }
@@ -1735,148 +1749,149 @@ class _KdbWriter {
   }
   writeSz = elm => {
     switch(elm.typ) {
-      case -19:
-      case -18:
-      case -17:
-      case -14:
-      case -13:
-      case  -8:
-      case  -6:
+      case  -19:
+      case  -18:
+      case  -17:
+      case  -14:
+      case  -13:
+      case   -8:
+      case   -6:
         return 5
-      case -16:
-      case -15:
-      case -12:
-      case  -9:
-      case  -7:
+      case  -16:
+      case  -15:
+      case  -12:
+      case   -9:
+      case   -7:
         return 9
-      case  -5:
+      case   -5:
         return 3
-      case -11:
+      case -128:
+      case  -11:
         return 1 + CdotJS.u8u16(elm.val).length + 1
-      case -10:
-      case  -4:
-      case  -1:
-      case 101:
-      case 102:
-      case 103:
+      case  -10:
+      case   -4:
+      case   -1:
+      case  101:
+      case  102:
+      case  103:
         return 2
-      case   0:
+      case    0:
         return elm.ary.reduce((sum, val) => sum + this.writeSz(val), 6)
-      case   1:
-      case   4:
-      case  10:
+      case    1:
+      case    4:
+      case   10:
         return 6 + elm.ary.length
-      case  11:
+      case   11:
         return elm.ary.reduce((sum, val) => sum + CdotJS.u8u16(val).length + 1, 6)
-      case   5:
+      case    5:
         return 6 + 2 * elm.ary.length
-      case   7:
-      case   9:
-      case  12:
-      case  15:
-      case  16:
+      case    7:
+      case    9:
+      case   12:
+      case   15:
+      case   16:
         return 6 + 8 * elm.ary.length
-      case   6:
-      case   8:
-      case  13:
-      case  14:
-      case  17:
-      case  18:
-      case  19:
+      case    6:
+      case    8:
+      case   13:
+      case   14:
+      case   17:
+      case   18:
+      case   19:
         return 6 + 4 * elm.ary.length
-      case  98:
+      case   98:
         return 3 + this.writeSz(elm.cols) + this.writeSz(elm.vals)
-      case  99:
+      case   99:
         return 1 + this.writeSz(elm.keys) + this.writeSz(elm.vals)
-      case 100:
-      case 104:
+      case  100:
+      case  104:
       default:
         throw new Error("'nyi: " + elm.typ)
     }
   }
   writeElm = elm => {
     switch (elm.typ) {
-      case -19:
-      case -18:
-      case -17:
-      case -14:
-      case -13:
-      case  -6:
+      case  -19:
+      case  -18:
+      case  -17:
+      case  -14:
+      case  -13:
+      case   -6:
         this.writeI8(elm.typ)
         return this.writeI32(elm.val)
-      case -16:
-      case -15:
-      case -12:
-      case  -7:
+      case  -16:
+      case  -15:
+      case  -12:
+      case   -7:
         this.writeI8(elm.typ)
         return this.writeI64(elm.val)
-      case -15:
-      case  -9:
+      case  -15:
+      case   -9:
         this.writeI8(elm.typ)
         return this.writeF64(elm.val)
-      case  -8:
+      case   -8:
         this.writeI8(elm.typ)
         return this.writeF32(elm.val)
-      case  -5:
+      case   -5:
         this.writeI8(elm.typ)
         return this.writeI16(elm.val)
-      case -10:
-      case  -4:
-      case  -1:
-      case 101:
-      case 102:
-      case 103:
+      case  -10:
+      case   -4:
+      case   -1:
+      case  101:
+      case  102:
+      case  103:
         this.writeI8(elm.typ)
         return this.writeI8(elm.val)
-      case -11: {
+      case  -128:
+      case  -11:
         this.writeI8(elm.typ)
         this.writeSym(elm.val)
         return
-      }
-      case   0:
+      case    0:
         return this.writeVec(this.writeElm, elm)
-      case   1:
-      case   4:
-      case  10:
+      case    1:
+      case    4:
+      case   10:
         return this.writeVec(this.writeI8, elm)
-      case   5:
+      case    5:
         return this.writeVec(this.writeI16, elm)
-      case   6:
-      case  13:
-      case  14:
-      case  17:
-      case  18:
-      case  19:
+      case    6:
+      case   13:
+      case   14:
+      case   17:
+      case   18:
+      case   19:
         return this.writeVec(this.writeI32, elm)
-      case   7:
-      case  12:
-      case  16:
+      case    7:
+      case   12:
+      case   16:
         return this.writeVec(this.writeI64, elm)
-      case   8:
+      case    8:
         return this.writeVec(this.writeF32, elm)
-      case   9:
-      case  15:
+      case    9:
+      case   15:
         return this.writeVec(this.writeF64, elm)
-      case  11:
+      case   11:
         this.writeVecHdr(elm)
         for (let i = 0 ; i < elm.ary.length ; i++) {
           this.writeSym(elm.ary[i])
         }
         return
-      case  98: 
+      case   98: 
         this.writeI8(elm.typ)
         this.writeI8(elm.att)
         this.writeI8(99)
         this.writeElm(elm.cols)
         this.writeElm(elm.vals)
         return
-      case  99: 
+      case   99: 
         this.writeI8(elm.typ)
         this.writeElm(elm.keys)
         this.writeElm(elm.vals)
         return
-      case 100:
-      case 104:
+      case  100:
+      case  104:
       default:
         throw new Error("'nyi : " + elm.typ)
     }
@@ -1977,7 +1992,7 @@ class _KdbTracker {
   constructor(url, listener) {
     this.listener = listener
     this.conn = new _MgWs(url, this)
-    this.queryId = 0
+    this.queryId = 1
     this.queryTracker = new Map()
   }
 
@@ -2029,6 +2044,7 @@ class _KdbTracker {
     }
     const hdr = new KdbSymbolAtom('.web.request')
     const qid = new KdbIntAtom(this.queryId++)
+    console.log("Preparing query with ID %d", qid.val)
     if (msg.constructor === Array) {
       msg = new KdbList(msg.toSpliced(1, 0, qid))
     }
@@ -2036,7 +2052,8 @@ class _KdbTracker {
       msg.ary = msg.ary.toSpliced(1, 0, qid)
     }
     const req = new KdbList([hdr, msg])
-    const buf = MgKdb.serialize(KdbMsgTyp.SYNC, req)
+    const buf = MgKdb.serialize(KdbMsgTyp.ASYNC, req)
+    // const buf = MgKdb.serialize(KdbMsgTyp.ASYNC, new KdbException("nyi"))
     this.conn.send(buf)
     this.queryTracker.set(qid.val, cbk)
   }
