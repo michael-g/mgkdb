@@ -490,7 +490,7 @@ static KdbBase* new1dSequence(KdbType typ, uint64_t cap, KdbAttr attr = KdbAttr:
 		case KdbType::SECOND_VECTOR:       return new KdbSecondVector{cap, attr};
 		case KdbType::TIME_VECTOR:         return new KdbTimeVector(cap, attr);
 		default:
-			throw std::format("'nyi sequence-type {}h", static_cast<int>(typ));
+			throw std::runtime_error{std::format("'nyi sequence-type {}h", static_cast<int>(typ))};
 	}
 }
 
@@ -517,7 +517,7 @@ static KdbBase* new1dSequence(char typ, uint64_t cap, KdbAttr attr = KdbAttr::NO
 		case 'v': return new1dSequence(KdbType::SECOND_VECTOR, cap, attr);
 		case 't': return new1dSequence(KdbType::TIME_VECTOR, cap, attr);
 		default:
-			throw std::format("'nyi sequence-type '{}'", typ);
+			throw std::runtime_error{std::format("'nyi sequence-type '{}'", typ)};
 	}
 }
 
@@ -1001,7 +1001,7 @@ WriteResult KdbList::write(WriteBuf & buf) const
 template <typename T> void _vec_set_value(T & vec, uint64_t idx, typename T::value_type val)
 {
 	if (idx > vec.size())
-		throw std::format("idx.oob: cannot insert {} at {}, vec.size is {}", val, idx, vec.size());
+		throw std::runtime_error{std::format("idx.oob: cannot insert {} at {}, vec.size is {}", val, idx, vec.size())};
 	if (idx == vec.size())
 		vec.insert(vec.end(), val);
 	else
@@ -1057,7 +1057,7 @@ uint64_t KdbGuidVector::wireSz() const
 void KdbGuidVector::setGuid(uint64_t idx, const GuidType & val)
 {
 	if (idx > m_vec.size())
-		throw "idx.oob";
+		throw std::runtime_error{"idx.oob"};
 
 	if (idx == m_vec.size()) {
 		m_vec.push_back(val);
@@ -1342,7 +1342,7 @@ KdbSymbolVector::KdbSymbolVector(uint64_t cap, KdbAttr attr)
 const std::string_view KdbSymbolVector::getString(size_t idx) const
 {
 	if (idx >= m_locs.size())
-		throw "idx oob";
+		throw std::runtime_error{"idx.oob"};
 	return std::string_view{m_data.data() + m_locs[idx].c_off, m_locs[idx].c_len - 1};
 }
 
@@ -1637,10 +1637,10 @@ KdbTable::KdbTable(const std::string_view & typs, const std::vector<std::string_
  , m_vals(std::make_unique<KdbList>(cols.size()))
 {
 	if (typs.size() != cols.size()) {
-		throw "types.length != cols.length";
+		throw std::runtime_error{"types.length != cols.length"};
 	}
 	if (cols.size() == 0) {
-		throw "names.size == 0";
+		throw std::runtime_error{"names.size == 0"};
 	}
 
 	// TODO what if any([0>x for x in typs])

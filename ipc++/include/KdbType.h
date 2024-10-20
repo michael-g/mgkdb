@@ -1168,10 +1168,10 @@ KdbTable::KdbTable(const std::vector<std::string_view> & names, T & ... cols)
  , m_vals(std::make_unique<KdbList>(names.size()))
 {
 	if (names.size() != sizeof...(cols)) {
-		throw "names.length != cols.length";
+		throw std::runtime_error{"names.length != cols.length"};
 	}
 	if (names.size() == 0) {
-		throw "names.size == 0";
+		throw std::runtime_error{"names.size == 0"};
 	}
 
 	// TODO what if any([0>x for x in typs])
@@ -1207,12 +1207,11 @@ template<KdbColCapable T>
 {
 	int32_t idx = m_cols->indexOf(def.m_name);
 	if (idx < 0) 
-		throw std::format("No such column '{}'", def.m_name);
+		throw std::runtime_error{std::format("No such column '{}'", def.m_name)};
 
 	const KdbBase *base = m_vals->getObj(idx);
 	if (base->m_typ != T::kdb_type) {
-		// throw std::format("Bad cast: requested type {} but have type {} in column '{}'", T::kdb_type, base->m_typ, def.m_name);
-		throw std::format("Bad cast: column '{}'", def.m_name);
+		throw std::runtime_error{std::format("Bad cast: column '{}'", def.m_name)};
 	}
 	def.m_col = static_cast<const T*>(base);
 }
