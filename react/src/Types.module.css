@@ -13,14 +13,19 @@ PARTICULAR PURPOSE. See the GNU Affero Public License for more details.
 You should have received a copy of the GNU Affero Public License along with The
 Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 */
+:root {
+  --g-header-bg-color: #ebebeb; 
+  --g-header-border-color: var(--g-header-bg-color);
+}
+
 .table {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
   --column-width: 10rem;
   --bg-color: white;
-  --border-color: lightgray;
-  --header-bg-color: #ebebeb;
+  --border-color: var(--g-header-border-color);
+  --header-bg-color: var(--g-header-bg-color);
   --header-bottom-border: 2px outset gainsboro;
   --header-font-weight: bold;
   --header-color: black;
@@ -83,3 +88,48 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 .fraction {
   text-align: right;
 }
+/* Table */
+.resultPane > DIV[mg-data-type='KdbTable'] > DIV[mg-data-type='KdbTable.column'] > DIV:first-child {
+  position: sticky;
+  top: 0;
+}
+
+/* Dict */
+DIV[mg-data-type='KdbDict'] {
+  --keys-border-color: var(--g-header-border-color);
+  --keys-bg-color: var(--g-header-bg-color);
+  display: flex;
+  flex-direction: row;
+}
+DIV[mg-data-type='KdbDict'] > DIV {
+  display: flex;
+  flex-direction: column;
+  width: fit-content;
+}
+DIV[mg-data-type='KdbDict'] > DIV > DIV {
+  padding: 0.2rem 0.3rem;
+  width: 100%;
+}
+/* dict.keys */
+DIV[mg-data-type='KdbDict'] > DIV:first-child > DIV {
+  background-color: var(--keys-bg-color);
+  border: 1px outset var(--keys-bg-color);
+}
+/* dict.vals */
+DIV[mg-data-type='KdbDict'] > DIV:nth-child(2) > DIV {
+  background-color: white;
+  border: 1px outset lightgray;
+}
+
+/* Char Vector */
+/*
+DIV[mg-data-type='KdbCharVector'] > DIV {
+  display: inline;
+}
+DIV[mg-data-type='KdbCharVector'] > DIV:first-child::before {
+  content: "\"";
+}
+DIV[mg-data-type='KdbCharVector'] > DIV:last-child::after {
+  content: "\"";
+}
+*/

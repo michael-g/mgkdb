@@ -368,7 +368,7 @@ export const KdbTimeUtil = {
 
 
 class KdbType {
-  constructor(typ, val) {      const days = 
+  constructor(typ) {
     this.typ = typ
   }
 }
@@ -1263,6 +1263,9 @@ export class KdbDict extends KdbType {
     this.keys = keys
     this.vals = vals
   }
+
+  count = () => this.vals.count()
+
   toString = () => `(${this.keys}!${this.vals})`
 }
 
@@ -2057,6 +2060,7 @@ class _KdbTracker {
     this.conn.send(buf)
     this.queryTracker.set(qid.val, cbk)
   }
+
 }
 
 MgKdb.Endpoint = _KdbTracker

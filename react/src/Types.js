@@ -15,19 +15,23 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 */
 import React from 'react'
 
-import { KdbTable, KdbTimeUtil, KdbByteAtom } from './kdb/ipc'
+import { KdbTable, KdbTimeUtil, KdbByteAtom } from './ipc'
 
-import styles from './Table.module.css'
+import styles from './Types.module.css'
+
+function til(len) {
+  return Array.from(Array(len).keys())
+}
 
 class Vector extends React.PureComponent {
   renderElem = (val, idx) => <div key={idx}>{val}</div>
   render = () => {
-    const {vec, idcs} = this.props
-    const ary = new Array(vec.ary.length)
+    const {object, idcs} = this.props
+    const ary = new Array(object.ary.length)
     for (let i = 0 ; i < ary.length ; i++) {
-      ary[i] = this.renderElem(vec.ary[idcs[i]], i)
+      ary[i] = this.renderElem(object.ary[idcs[i]], i)
     }
-    return ary;
+    return <div mg-data-type={object.constructor.name}>{ary}</div>
   }
 }
 
@@ -35,7 +39,7 @@ class BoolVector extends Vector {
   renderElem = (val, idx) => <div key={idx}>{val}</div>
 }
 class ByteVector extends Vector {
-  renderElem = (val, idx) => <div key={idx}>0x{KdbByteAtom.toHexDigits(val)}</div>
+  renderElem = (val, idx) => <div key={idx}>{KdbByteAtom.toHexDigits(val)}</div>
 }
 class IntegerVector extends Vector {
   static F = new Intl.NumberFormat('en-GB', {minimumIntegerDigits: 1, useGrouping: true })
@@ -73,25 +77,6 @@ class List extends Vector {
   renderElem = (val, idx) => <div key={idx}>{val.toString()}</div>
 }
 
-const TYPE_MAP = {
-  0: List,
-  1: BoolVector,
-  4: ByteVector,
-  5: IntegerVector,
-  6: IntegerVector,
-  7: IntegerVector,
-  8: FloatingPointVector,
-  9: FloatingPointVector,
-  10: CharVector,
-  12: TimestampVector,
-  13: MonthVector,
-  14: DateVector,
-  16: TimespanVector,
-  17: MinuteVector,
-  18: SecondVector,
-  19: TimeVector,
-}
-
 /**
 tbl
 cfg
@@ -121,9 +106,8 @@ class Table extends React.PureComponent {
     }
   }
 
-  getColVecPairs = () => {
-    const {cfg, tbl} = this.props
-    if (cfg.cols && cfg.cols.names) {
+  getColVecPairs = (cfg, tbl) => {
+    if (cfg && cfg.cols && cfg.cols.names) {
       const nms = cfg.cols.names
       const vls = tbl.vals.ary
       const ary = new Array(nms.length)
@@ -141,7 +125,7 @@ class Table extends React.PureComponent {
  
 
   getTitle = (cfg, col, idx) => {
-    if (cfg.cols && cfg.cols.titles && col in cfg.cols.titles) {
+    if (cfg && cfg.cols && cfg.cols.titles && col in cfg.cols.titles) {
       const tls = cfg.cols.titles
       if (typeof(tls[col]) === 'function') {
         return tls[col](col, idx)
@@ -164,16 +148,16 @@ class Table extends React.PureComponent {
     }
   }
 
-  sortGenAsc = ([lhs, _i], [rhs, _j]) => lhs == rhs ? 0 : lhs < rhs ? -1 : 1
+  sortGenAsc = ([lhs, _i], [rhs, _j]) => lhs === rhs ? 0 : lhs < rhs ? -1 : 1
 
-  sortGenDesc = ([lhs, _i], [rhs, _j]) => lhs == rhs ? 0 : lhs < rhs ? 1 : -1
+  sortGenDesc = ([lhs, _i], [rhs, _j]) => lhs === rhs ? 0 : lhs < rhs ? 1 : -1
 
   sortNumAsc = ([lhs, _i], [rhs, _j]) => Number(lhs - rhs)
   
   sortNumDesc = ([lhs, _i], [rhs, _j]) => Number(rhs - lhs)
 
   onSortClick = evt => {
-    const tbl = this.props.tbl
+    const tbl = this.props.object
     const col = evt.target.attributes['data-kcol-name'].value
     const idx = tbl.findColIdx(col)
     const vec = tbl.vals.ary[idx]
@@ -217,7 +201,7 @@ class Table extends React.PureComponent {
     const colOpts = {
       style: {anchorName: name},
       onClick: this.onSortClick,
-      ['data-kcol-name']: col,
+      'data-kcol-name': col,
       ref: ref,
     }
    
@@ -234,10 +218,10 @@ class Table extends React.PureComponent {
   }
 
   renderVals = (cfg, idc, col, idx, val) => {
-    if (cfg.cols && cfg.cols.formatter && col in cfg.cols.colfmtr) {
+    if (cfg && cfg.cols && cfg.cols.formatter && col in cfg.cols.colfmtr) {
       return cfg.cols.colfmtr(col, val)
     }
-    if (cfg.cols && cfg.cols.formatter && col in cfg.cols.rowfmtr) {
+    if (cfg && cfg.cols && cfg.cols.formatter && col in cfg.cols.rowfmtr) {
       const fmt = cfg.cols.rowfmtr
       const ary = new Array(val.ary.length)
       
@@ -247,7 +231,7 @@ class Table extends React.PureComponent {
       return ary
     }
     const Vec = !(val.typ in TYPE_MAP) ? Vector : TYPE_MAP[val.typ]
-    return <Vec vec={val} col={col} col_idx={idx} idcs={idc}/>
+    return <Vec object={val} col={col} col_idx={idx} idcs={idc}/>
   }
 
   renderCol = (cfg, idc, idx, pair) => {
@@ -258,7 +242,7 @@ class Table extends React.PureComponent {
       opts.style = {width, maxWidth: width, minWidth: width}
     }
     return (
-      <div key={col} className={styles.column} {...opts}>
+      <div key={col} className={styles.column} mg-data-type='KdbTable.column' {...opts}>
         {this.renderHeader(cfg, col, idx)}
         {this.renderVals(cfg, idc, col, idx, val)}
       </div>
@@ -266,16 +250,16 @@ class Table extends React.PureComponent {
   }
   
   render = () => {
-    const {tbl, cfg} = this.props
+    const {object: tbl, cfg} = this.props
     if (tbl.constructor !== KdbTable) {
       return <></>
     }
-    const cols = this.getColVecPairs()
+    const cols = this.getColVecPairs(cfg, tbl)
     let idcs = this.state.sort.idcs
-    idcs = idcs !== null ? idcs : Array.from(Array(tbl.vals.ary[0].count()).keys())
+    idcs = idcs !== null ? idcs : til(tbl.vals.ary[0].count())
     
     return (
-      <div className={styles.table}>
+      <div className={styles.table} mg-data-type='KdbTable'>
         {cols.map((pair, idx) => this.renderCol(cfg, idcs, idx, pair))}
       </div>
     )
@@ -283,4 +267,72 @@ class Table extends React.PureComponent {
 
 }
 
-export default Table
+class Dict extends React.PureComponent {
+
+  renderSeq = ary => {
+    const Vec = !(ary.typ in TYPE_MAP) ? Vector : TYPE_MAP[ary.typ]
+    const idc = til(ary.count())
+    return <Vec object={ary} idcs={idc}/>
+  }
+
+  render = () => {
+    const {object: dct, cfg} = this.props
+    if (!dct || !dct.keys) {
+      return <></>
+    }
+    return (
+      <div mg-data-type='KdbDict'>
+        {this.renderSeq(dct.keys)}
+        {this.renderSeq(dct.vals)}
+      </div>
+    )
+  }
+}
+
+class Atom extends React.PureComponent {
+  render = () => {
+    const obj = this.props.object
+    if (!obj) {
+      return <></>
+    }
+    return <div mg-data-type={obj.constructor.name}>{obj.toString()}</div>
+  }
+}
+
+const TYPE_MAP = {
+  0: List,
+  1: BoolVector,
+  4: ByteVector,
+  5: IntegerVector,
+  6: IntegerVector,
+  7: IntegerVector,
+  8: FloatingPointVector,
+  9: FloatingPointVector,
+  10: CharVector,
+  11: Vector,
+  12: TimestampVector,
+  13: MonthVector,
+  14: DateVector,
+  16: TimespanVector,
+  17: MinuteVector,
+  18: SecondVector,
+  19: TimeVector,
+  98: Table,
+  99: Dict,
+}
+
+export class TypeWrapper extends React.PureComponent {
+  render = () => {
+    const obj = this.props.object
+    if (!obj || !obj.typ) {
+      return <></>
+    }
+    if (obj.typ < 0) {
+      return <Atom object={obj}/>
+    }
+    const Typ = TYPE_MAP[obj.typ]
+    const idc = til(obj.count())
+    return <Typ object={obj} idcs={idc}/>
+  }
+}
+

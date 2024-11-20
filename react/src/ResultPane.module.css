@@ -1,0 +1,11 @@
+.resultPane {
+  position: absolute;
+  width: 100%;
+  left: 0; right: 0; bottom: 0;
+  height: 30rem;
+  overflow-y: auto;
+  border-top-width: 0.4rem;
+  border-top-color: lightgray;
+  border-top-style: ridge;
+  padding-top: 1px;
+}

@@ -29,6 +29,21 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
  ;.web.replyOk[C;.z.w] tbl
  }
 
+.web.getTable:{[C;N]
+ ;cls:`bool`byte`short`int`long`real`float`char`sym`timestamp`month`date`timespan`minute`second`time`string
+ ;vls:{x?y}[N] each (0b;0x0;0h;0i;0j;99e;99f;" ";`3;.z.P;13h$.z.d;.z.d;.z.n),(17 18 19h$\: .z.t),enlist 3 cut (N * 3) ?  .Q.a,.Q.A,.Q.n
+ ;tbl:flip cls!vls
+ ;.web.replyOk[C;.z.w] tbl
+ }
+
+.web.getDict:{[C] .web.replyOk[C;.z.w] (`ab;0x0f0a0b)!`one`two }
+
+.web.getCharVec:{[C] .web.replyOk[C;.z.w] "Hello, World!" }
+
+.web.getSymAtom:{[C] .web.replyOk[C;.z.w] `VOD.L }
+
+.web.evalCmd:{[C;Q] .web.replyOk[C;.z.w] value Q }
+
 .web.reply:{[C;H;E;M]
   msg:(`.web.response;C;E;M)
  ;.web.log "Replying with ",.Q.s1 msg
