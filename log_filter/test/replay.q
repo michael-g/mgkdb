@@ -5,20 +5,29 @@ upd:{[T;X]
  }
 
 .rpl.trdMsg:{
-  (.z.p;`VOD.L;100;100f;"||||h r|";`XLON)
+ 	enlist each (.z.p;`VOD.L;100;100f;"||||h r|";`XLON)
+ }
+
+.rpl.trdTbl:{
+  flip`time`sym`prc`sz`mmt`xch!.rpl.trdMsg[]
  }
 
 .rpl.qteMsg:{
-  (.z.p;`AZN.L;42;100.;101.;19;`XLON)
+  enlist each (.z.p;`AZN.L;42;100.;101.;19;`XLON)
+ }
+
+.rpl.qteTbl:{
+  flip`time`sym`bsz`bid`ask`asz`xch!.rpl.qteMsg[]
  }
 
 .rpl.wr:{[H;T]
-  H enlist (`upd;T;$[`trade~T;.rpl.trdMsg;.rpl.qteMsg]`)
+  H enlist (`upd;T;$[`trade~T;.rpl.trdMsg;`trade_tbl~T;.rpl.trdTbl;`quote~T;.rpl.qteMsg;.rpl.qteTbl]`)
  }
 
 .rpl.wrjnl:{[F;N]
   wrf:.rpl.wr jfd:hopen .[F;();:;()]
  ;wrf each ?[1h$N?2;`trade;`quote]
+ ;wrf each ?[1h$N?2;`trade_tbl;`quote_tbl]
  ;hclose jfd
  }
 

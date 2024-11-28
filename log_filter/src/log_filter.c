@@ -17,7 +17,6 @@ FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TOR
 OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 */
-#include <bits/time.h>
 #include <stdlib.h>      // NULL, abort, exit
 #include <string.h>      // strlen, strerror, strncmp
 #include <sys/stat.h>    // stat, shm_open constants
@@ -27,6 +26,7 @@ DEALINGS IN THE SOFTWARE.
 #include <fcntl.h>       // open, O_* constants
 #include <sys/mman.h>    // shm_open, mmap
 #include <time.h>        // clock_gettime
+#include <sys/time.h>
 #include <errno.h>
 
 #define KXVER 3
@@ -120,7 +120,6 @@ static uint64_t mg_read_i16_atom(const int8_t typ, const int8_t *src, K *ptr)
 {
   *ptr = ka(typ);
   return mg_read_i16(src, &(*ptr)->h);
-
 }
 static uint64_t mg_read_i32_atom(const int8_t typ, const int8_t *src, K *ptr)
 {
@@ -134,7 +133,7 @@ static uint64_t mg_read_i64_atom(const int8_t typ, const int8_t *src, K *ptr)
 }
 static uint64_t mg_read_uuid_atom(const int8_t typ, const int8_t *src, K *ptr)
 {
-  U g = {0};
+  U g = {{0}};
   uint64_t len = mg_read_uuid(src, &g);
   *ptr = ku(g);
   return len;
@@ -309,7 +308,7 @@ static uint64_t mg_chk_match_and_get_len(const int8_t *const src, K tbl_names, i
       off += SZ_I8 + len;
       if (1 == level && 1 == index) {
         for (int64_t i = 0 ; i < tbl_names->n ; i++) {
-          if (0 == strncmp(kS(tbl_names)[i], pos, len)) {
+          if (0 == strncmp(kS(tbl_names)[i], pos, len + SZ_I8)) {
             *relevant = 1;
           }
         }
@@ -351,6 +350,7 @@ static uint64_t mg_chk_match_and_get_len(const int8_t *const src, K tbl_names, i
       return off;
     }
     case XT: {
+      off += SZ_I8; // some sort of attribute byte
       off += mg_chk_match_and_get_len(src + off, tbl_names, relevant, level, 0);
       return off;
     }
