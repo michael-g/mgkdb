@@ -1,6 +1,6 @@
-On the basis that perfection is the enemy of done, here's a KDB IPC library modern C++ (`c++20`). The library supports the deserialisation of compressed messages and up to version 3 (I think) of the KDB IPC format, in other words the one with Timestamps but which is limited to `INT32_MAX` elements in its vectors. Support for the "big data" version may follow at some point. 
+On the basis that perfection is the enemy of done, here's a KDB IPC library in modern C++ (`c++23`). The library supports the deserialisation of compressed messages and up to version 3 of the KDB IPC format, in other words: the one _with_ timestamps but which is limited to `INT32_MAX` elements in its vectors. Support for the "big data" version may follow at some point.
 
-The library is interesting in that it can operate on partial reads of the binary IPC message, and so can make progress doing CPU work deserialising the data while data is still pending on the socket. The same is true of the decompressor: it will decompress as much data as it can and pass this on to the parser without having to have the whole image in memory.
+The library is interesting in that it can operate on partial reads of the binary IPC message, and so can make progress doing CPU work to deserialise the data while data is perhaps still in flight. The same is true of the decompressor: it will decompress as much data as it can and pass this on to the parser without needing the whole image in memory.
 
 The library does not (as yet) contain any I/O components and simply reads from memory buffers.
 
