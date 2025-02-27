@@ -918,11 +918,6 @@ KdbList::KdbList(uint64_t cap, KdbAttr attr)
 	m_vals.resize(0);
 }
 
-KdbList::~KdbList()
-{
-	m_vals.clear();
-}
-
 void KdbList::push(std::unique_ptr<KdbBase> val)
 {
 	m_vals.emplace_back(val.release());
@@ -2127,16 +2122,16 @@ bool KdbIpcMessageReader::readMsgHdr(ReadBuf & buf, ReadMsgResult & result)
 	if (0 == m_ipc_len) {
 		const uint64_t pos = buf.offset();
 		if (buf.remaining() < 8) {
-			result.result = ReadResult::RD_INCOMPLETE, result.bytes_consumed = 0;
+			result.result = ReadResult::RD_INCOMPLETE;
 			return false;
 		}
 		const int8_t end = buf.read<int8_t>();
 		if (1 != end) {
-			result.result = ReadResult::RD_ERR_IPC, result.bytes_consumed = 0;
+			result.result = ReadResult::RD_ERR_IPC;
 			return false;
 		}
 
-		m_msg_typ = static_cast<KdbMsgType>(buf.read<int8_t>());
+		result.msg_typ = m_msg_typ = static_cast<KdbMsgType>(buf.read<int8_t>());
 		m_compressed = 1 == buf.read<int8_t>();
 		std::ignore = buf.read<int8_t>();
 		m_ipc_len = buf.read<int32_t>();
@@ -2146,7 +2141,7 @@ bool KdbIpcMessageReader::readMsgHdr(ReadBuf & buf, ReadMsgResult & result)
 				m_ipc_len = 0;
 				// NB: the ReadBuf is internal and we want the client to present the same IPC bytes again
 				// when more are available, hence g_used <- 0
-				result.result = ReadResult::RD_INCOMPLETE, result.bytes_consumed = 0;
+				result.result = ReadResult::RD_INCOMPLETE;
 				return false;
 			}
 			m_msg_len = buf.read<int32_t>();
@@ -2154,7 +2149,7 @@ bool KdbIpcMessageReader::readMsgHdr(ReadBuf & buf, ReadMsgResult & result)
 			if (nullptr == dst) {
 				// again: we want the caller to present the same IPC bytes again so we say we haven't used
 				// any yet, although TBH, if the allocation fails, is the client really going to continue?
-				result.result = ReadResult::RD_ERR_ALLOC, result.bytes_consumed = 0;
+				result.result = ReadResult::RD_ERR_ALLOC;
 				return false;
 			}
 			m_inflater = std::make_unique<KdbIpcDecompressor>(m_ipc_len, m_msg_len, std::unique_ptr<int8_t[]>(static_cast<int8_t*>(dst)));
@@ -2225,7 +2220,6 @@ bool KdbIpcMessageReader::readMsg(const void *src, uint64_t len, ReadMsgResult &
 		complete = readMsgData(zBuf, result);
 	}
 	m_byt_usd += buf.offset() - src_pos;
-	result.bytes_consumed = hdr_usd + buf.offset() - src_pos;
 	return complete;
 }
 
@@ -2237,6 +2231,11 @@ uint64_t KdbIpcMessageReader::getIpcLength() const
 uint64_t KdbIpcMessageReader::getInputBytesConsumed() const
 {
 	return m_byt_usd;
+}
+
+uint64_t KdbIpcMessageReader::getInputBytesRemaining() const
+{
+	return m_ipc_len - m_byt_usd;
 }
 
 uint64_t KdbIpcMessageReader::getMsgBytesDeserialized() const
@@ -2266,10 +2265,15 @@ size_t KdbUtil::writeLoginMsg(std::string_view usr, std::string_view pwd, std::u
 	return len;
 }
 
+size_t KdbUtil::ipcMessageLen(const KdbBase & payload)
+{
+	return SZ_MSG_HDR + payload.wireSz();
+}
+
 //--------------------------------------------------------------------------------------- KdbIpcMessageWriter
-KdbIpcMessageWriter::KdbIpcMessageWriter(KdbMsgType msg_typ, std::shared_ptr<KdbBase> msg)
+KdbIpcMessageWriter::KdbIpcMessageWriter(KdbMsgType msg_typ, const KdbBase & msg)
  : m_msg_typ(msg_typ)
- , m_ipc_len(msg->wireSz() + SZ_MSG_HDR)
+ , m_ipc_len(KdbUtil::ipcMessageLen(msg))
  , m_root(msg)
 {
 	m_byt_rem = m_ipc_len;
@@ -2298,7 +2302,7 @@ WriteResult KdbIpcMessageWriter::write(void *dst, size_t cap)
 		buf.ffwd(SZ_MSG_HDR);
 	}
 
-	WriteResult wr = m_root->write(buf);
+	WriteResult wr = m_root.write(buf);
 	m_byt_rem -= buf.cursorOff();
 	return wr;
 }

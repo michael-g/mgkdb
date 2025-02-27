@@ -79,7 +79,7 @@ TEST(KdbTypeTest, TestKdbIpcMessageReaderReadMsg)
 	bool complete = reader.readMsg(src.get(), len, result);
 	EXPECT_TRUE(complete);
 	EXPECT_EQ(ReadResult::RD_OK, result.result);
-	EXPECT_EQ(len, result.bytes_consumed);
+	EXPECT_EQ(0, reader.getInputBytesRemaining());
 	EXPECT_EQ(len, reader.getInputBytesConsumed());
 	EXPECT_EQ(len, reader.getMsgBytesDeserialized() + SZ_MSG_HDR);
 	EXPECT_EQ(len, reader.getIpcLength());
@@ -187,7 +187,7 @@ TEST(KdbIpcMessageReaderTest, TestRead10kQaViaMsgReader)
 	EXPECT_TRUE(complete);
 	EXPECT_EQ(ReadResult::RD_OK, result.result);
 
-	EXPECT_EQ(len, result.bytes_consumed);
+	EXPECT_EQ(0, rdr.getInputBytesRemaining());
 	EXPECT_EQ(len, rdr.getInputBytesConsumed());
 	// Read the uncompressed message length from the stream rather than hardcoding it. Use a throwaway
 	// ReadBuf for this, skipping the first  eight bytes.

@@ -126,9 +126,8 @@ TEST(KdbConnectedTest, TestKdbConnect)
 
 TEST(KdbConnectedTest, TestSimpleWrite)
 {
-	auto unq = std::make_unique<KdbCharVector>(std::string_view{"-1\"Hello, world!\""});
-	auto shr = std::shared_ptr<KdbCharVector>(unq.release());
-	KdbIpcMessageWriter writer{KdbMsgType::ASYNC, shr};
+	KdbCharVector msg{"-1\"Hello, world!\""};
+	KdbIpcMessageWriter writer{KdbMsgType::ASYNC, msg};
 	size_t rqd = writer.bytesRemaining();
 
 	auto mem = std::make_unique<char[]>(rqd);

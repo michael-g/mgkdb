@@ -15,4 +15,4 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 # add_library(mgkdbipc_static STATIC $<TARGET_OBJECTS:objlib>)
 
 add_library(mgkdbipc STATIC KdbType.cpp)
-target_compile_options(mgkdbipc PRIVATE -Wall -Wextra -Wpedantic -O2 -Wno-unused-parameter -Wno-unused-variable)
+target_compile_options(mgkdbipc PRIVATE -Wall -Wextra -Wpedantic -O2 -Wno-unused-parameter -Wno-unused-variable -fPIC)

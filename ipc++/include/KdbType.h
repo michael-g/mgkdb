@@ -18,6 +18,7 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 #define __mg7x_KdbType__H__
 #pragma once
 #include <bit>
+#include <type_traits>
 #include <format>
 #include <iterator>
 
@@ -105,6 +106,7 @@ enum class KdbType
 	BINARY_PRIMITIVE  = 102,
 	TERNARY_PRIMITIVE = 103,
 	PROJECTION        = 104,
+	UNSET             = 127,
 };
 
 enum class KdbMsgType
@@ -226,6 +228,7 @@ enum class KdbAttr
 
 enum class ReadResult
 {
+	RD_UNSET,
 	RD_OK,
 	RD_INCOMPLETE,
 	RD_ERR_IPC,
@@ -235,6 +238,7 @@ enum class ReadResult
 
 enum class WriteResult
 {
+	WR_UNSET,
 	WR_OK,
 	WR_INCOMPLETE,
 };
@@ -730,12 +734,16 @@ struct PtrRef
 	bool     m_dry;
 
 	PtrRef() = default;
-	PtrRef(PtrRef & rhs) : m_ptr(rhs.m_ptr), m_dry(rhs.m_dry) { rhs.m_dry = false; }
-	PtrRef(PtrRef && rhs) : m_ptr(rhs.m_ptr), m_dry(rhs.m_dry) { rhs.m_dry = false; }
+	PtrRef(PtrRef & rhs) noexcept : m_ptr(rhs.m_ptr), m_dry(rhs.m_dry) { rhs.m_dry = false; }
+	PtrRef(PtrRef && rhs) noexcept : m_ptr(rhs.m_ptr), m_dry(rhs.m_dry) { rhs.m_dry = false; }
 	PtrRef(const PtrRef &) = delete;
 
-	PtrRef(KdbBase &ptr) : m_ptr(&ptr), m_dry(false) {}
-	PtrRef(KdbBase *ptr) : m_ptr(ptr), m_dry(true) {}
+	PtrRef(KdbBase &ptr) noexcept : m_ptr(&ptr), m_dry(false) { }
+	PtrRef(KdbBase *ptr) noexcept : m_ptr(ptr), m_dry(true) { }
+
+	PtrRef& operator=(const PtrRef &) = delete;
+	PtrRef& operator=(PtrRef &) = delete;
+	PtrRef& operator=(PtrRef && rhs) = delete;
 
 	~PtrRef()
 	{
@@ -747,6 +755,12 @@ struct PtrRef
 	}
 };
 
+static_assert(std::is_default_constructible_v<PtrRef>);
+static_assert(!std::is_copy_constructible_v<PtrRef>);
+static_assert(!std::is_copy_assignable_v<PtrRef>);
+static_assert(std::is_move_constructible_v<PtrRef>);
+static_assert(!std::is_move_assignable_v<PtrRef>);
+
 //-------------------------------------------------------------------------------- KdbList
 class KdbList : public KdbBase
 {
@@ -757,7 +771,6 @@ public:
 	constexpr static KdbType kdb_type = KdbType::LIST;
 
 	KdbList(uint64_t cap = 0, KdbAttr attr = KdbAttr::NONE);
-	~KdbList();
 
 	uint64_t count() const override { return m_vals.size(); }
 	void push(std::unique_ptr<KdbBase> val);
@@ -1347,6 +1360,118 @@ struct KdbProjection : public KdbBase
 	WriteResult write(WriteBuf & buf) const override;
 };
 
+class KdbIpcDecompressor
+{
+	uint64_t m_ipc_len;
+	uint64_t m_msg_len;
+
+	uint32_t m_idx{0};   // i
+	uint64_t m_off{0};   // s
+	uint64_t m_rdx{0};   // tracks offset into src message
+	uint64_t m_chx{0};   // p: tracks the trailing cache-pointer 
+	uint32_t m_bit{0};   // f
+	uint32_t m_lbh[256]; // aa
+
+	std::unique_ptr<int8_t[]> m_dst;
+
+	public:
+		KdbIpcDecompressor(uint64_t ipc_len, uint64_t msg_len, std::unique_ptr<int8_t[]> dst);
+		uint64_t blockReadSz(ReadBuf & buf) const;
+		uint64_t uncompress(ReadBuf & buf);
+		bool isComplete() const;
+		uint64_t getUsedInputCount() const;
+		ReadBuf getReadBuf(int64_t csr) const;
+};
+
+struct ReadMsgResult
+{
+	ReadResult               result;
+	KdbMsgType               msg_typ;
+	std::unique_ptr<KdbBase> message;
+
+	ReadMsgResult() = default;
+	~ReadMsgResult() = default;
+	
+	// ReadMsgResult(ReadMsgResult & rhs) = delete;
+	ReadMsgResult(const ReadMsgResult & rhs) = delete;
+
+	// ReadMsgResult & operator=(ReadMsgResult & rhs) = delete;
+	ReadMsgResult & operator=(const ReadMsgResult & rhs) = delete;
+
+	ReadMsgResult(ReadMsgResult && rhs) noexcept
+	 : result{rhs.result}
+	 , msg_typ{rhs.msg_typ}
+	 , message{rhs.message.release()}
+	{ }
+
+	ReadMsgResult & operator =(ReadMsgResult && rhs) noexcept
+	{
+		result = rhs.result;
+		msg_typ = rhs.msg_typ;
+		message.reset(rhs.message.release());
+
+		rhs.result = ReadResult::RD_UNSET;
+		rhs.msg_typ = static_cast<KdbMsgType>(0);
+
+		return *this;
+	}
+
+};
+
+static_assert(std::is_default_constructible_v<ReadMsgResult>);
+static_assert(!std::is_copy_constructible_v<ReadMsgResult>);
+static_assert(!std::is_copy_assignable_v<ReadMsgResult>);
+static_assert(std::is_move_constructible_v<ReadMsgResult>);
+static_assert(std::is_move_assignable_v<ReadMsgResult>);
+
+class KdbIpcMessageReader
+{
+	KdbMsgType m_msg_typ;
+	uint64_t   m_ipc_len{0};
+	uint64_t   m_msg_len{0};
+	uint64_t   m_byt_usd{0};
+	uint64_t   m_byt_dez{0};
+	bool       m_compressed;
+	std::unique_ptr<KdbBase> m_msg;
+	std::unique_ptr<KdbIpcDecompressor> m_inflater;
+
+	bool readMsgHdr(ReadBuf & buf, ReadMsgResult & result);
+	bool readMsgData(ReadBuf & buf, ReadMsgResult & result);
+	bool readMsgData1(ReadBuf & buf, ReadMsgResult & result);
+
+	public:
+		bool readMsg(const void *src, uint64_t len, ReadMsgResult & result);
+		uint64_t getIpcLength() const;
+		uint64_t getInputBytesConsumed() const;
+		uint64_t getInputBytesRemaining() const;
+		uint64_t getMsgBytesDeserialized() const;
+
+
+};
+
+struct KdbUtil
+{
+	static
+	size_t writeLoginMsg(std::string_view usr, std::string_view pwd, std::unique_ptr<char> & ptr);
+
+	static
+	size_t ipcMessageLen(const KdbBase & payload);
+};
+
+class KdbIpcMessageWriter
+{
+	KdbMsgType               m_msg_typ;
+	size_t                   m_ipc_len;
+	const KdbBase          & m_root;
+	size_t                   m_byt_rem;
+
+	public:
+		KdbIpcMessageWriter(KdbMsgType msg_typ, const KdbBase & msg);
+
+		size_t bytesRemaining() const;
+		WriteResult write(void *dst, size_t cap);
+};
+
 //-------------------------------------------------------------------------------- KdbQuirks
 template <class T> struct KdbQuirks;
 
@@ -1582,6 +1707,129 @@ auto vectorPrint(auto & ctx, const T & vec) {
 }; // end namespace mg7x
 
 //-------------------------------------------------------------------------------- Formatters
+template<>
+struct std::formatter<mg7x::KdbType>
+{
+	constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }
+	template<class FormatContext> auto format(const mg7x::KdbType & typ, FormatContext & ctx) const
+	{
+		switch (typ) {
+			case mg7x::KdbType::EXCEPTION:             return std::format_to(ctx.out(), "EXCEPTION");
+			case mg7x::KdbType::TIME_ATOM:             return std::format_to(ctx.out(), "TIME_ATOM");
+			case mg7x::KdbType::SECOND_ATOM:           return std::format_to(ctx.out(), "SECOND_ATOM");
+			case mg7x::KdbType::MINUTE_ATOM:           return std::format_to(ctx.out(), "MINUTE_ATOM");
+			case mg7x::KdbType::TIMESPAN_ATOM:         return std::format_to(ctx.out(), "TIMESPAN_ATOM");
+			case mg7x::KdbType::DATE_ATOM:             return std::format_to(ctx.out(), "DATE_ATOM");
+			case mg7x::KdbType::MONTH_ATOM:            return std::format_to(ctx.out(), "MONTH_ATOM");
+			case mg7x::KdbType::TIMESTAMP_ATOM:        return std::format_to(ctx.out(), "TIMESTAMP_ATOM");
+			case mg7x::KdbType::SYMBOL_ATOM:           return std::format_to(ctx.out(), "SYMBOL_ATOM");
+			case mg7x::KdbType::CHAR_ATOM:             return std::format_to(ctx.out(), "CHAR_ATOM");
+			case mg7x::KdbType::FLOAT_ATOM:            return std::format_to(ctx.out(), "FLOAT_ATOM");
+			case mg7x::KdbType::REAL_ATOM:             return std::format_to(ctx.out(), "REAL_ATOM");
+			case mg7x::KdbType::LONG_ATOM:             return std::format_to(ctx.out(), "LONG_ATOM");
+			case mg7x::KdbType::INT_ATOM:              return std::format_to(ctx.out(), "INT_ATOM");
+			case mg7x::KdbType::SHORT_ATOM:            return std::format_to(ctx.out(), "SHORT_ATOM");
+			case mg7x::KdbType::GUID_ATOM:             return std::format_to(ctx.out(), "GUID_ATOM");
+			case mg7x::KdbType::BYTE_ATOM:             return std::format_to(ctx.out(), "BYTE_ATOM");
+			case mg7x::KdbType::BOOL_ATOM:             return std::format_to(ctx.out(), "BOOL_ATOM");
+			case mg7x::KdbType::LIST:                  return std::format_to(ctx.out(), "LIST");
+			case mg7x::KdbType::BOOL_VECTOR:           return std::format_to(ctx.out(), "BOOL_VECTOR");
+			case mg7x::KdbType::GUID_VECTOR:           return std::format_to(ctx.out(), "GUID_VECTOR");
+			case mg7x::KdbType::BYTE_VECTOR:           return std::format_to(ctx.out(), "BYTE_VECTOR");
+			case mg7x::KdbType::SHORT_VECTOR:          return std::format_to(ctx.out(), "SHORT_VECTOR");
+			case mg7x::KdbType::INT_VECTOR:            return std::format_to(ctx.out(), "INT_VECTOR");
+			case mg7x::KdbType::LONG_VECTOR:           return std::format_to(ctx.out(), "LONG_VECTOR");
+			case mg7x::KdbType::REAL_VECTOR:           return std::format_to(ctx.out(), "REAL_VECTOR");
+			case mg7x::KdbType::FLOAT_VECTOR:          return std::format_to(ctx.out(), "FLOAT_VECTOR");
+			case mg7x::KdbType::CHAR_VECTOR:           return std::format_to(ctx.out(), "CHAR_VECTOR");
+			case mg7x::KdbType::SYMBOL_VECTOR:         return std::format_to(ctx.out(), "SYMBOL_VECTOR");
+			case mg7x::KdbType::TIMESTAMP_VECTOR:      return std::format_to(ctx.out(), "TIMESTAMP_VECTOR");
+			case mg7x::KdbType::MONTH_VECTOR:          return std::format_to(ctx.out(), "MONTH_VECTOR");
+			case mg7x::KdbType::DATE_VECTOR:           return std::format_to(ctx.out(), "DATE_VECTOR");
+			case mg7x::KdbType::TIMESPAN_VECTOR:       return std::format_to(ctx.out(), "TIMESPAN_VECTOR");
+			case mg7x::KdbType::MINUTE_VECTOR:         return std::format_to(ctx.out(), "MINUTE_VECTOR");
+			case mg7x::KdbType::SECOND_VECTOR:         return std::format_to(ctx.out(), "SECOND_VECTOR");
+			case mg7x::KdbType::TIME_VECTOR:           return std::format_to(ctx.out(), "TIME_VECTOR");
+			case mg7x::KdbType::TABLE:                 return std::format_to(ctx.out(), "TABLE");
+			case mg7x::KdbType::DICT:                  return std::format_to(ctx.out(), "DICT");
+			case mg7x::KdbType::FUNCTION:              return std::format_to(ctx.out(), "FUNCTION");
+			case mg7x::KdbType::UNARY_PRIMITIVE:       return std::format_to(ctx.out(), "UNARY_PRIMITIVE");
+			case mg7x::KdbType::BINARY_PRIMITIVE:      return std::format_to(ctx.out(), "BINARY_PRIMITIVE");
+			case mg7x::KdbType::TERNARY_PRIMITIVE:     return std::format_to(ctx.out(), "TERNARY_PRIMITIVE");
+			case mg7x::KdbType::PROJECTION:            return std::format_to(ctx.out(), "PROJECTION");
+			case mg7x::KdbType::UNSET:                 return std::format_to(ctx.out(), "<unset>");
+			default:                                   return std::format_to(ctx.out(), "MISSING_KdbType_CONVERSION");
+		}
+	}
+};
+
+template<>
+struct std::formatter<mg7x::WriteResult>
+{
+	constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }
+	template<class FormatContext> auto format(const mg7x::WriteResult & res, FormatContext & ctx) const
+	{
+		switch (res) {
+			case mg7x::WriteResult::WR_UNSET:      return std::format_to(ctx.out(), "WR_UNSET");
+			case mg7x::WriteResult::WR_OK:         return std::format_to(ctx.out(), "WR_OK");
+			case mg7x::WriteResult::WR_INCOMPLETE: return std::format_to(ctx.out(), "WR_INCOMPLETE");
+			default:
+				break;
+		}
+		return std::format_to(ctx.out(), "UNHANDLED.WriteResult({})", static_cast<int>(res));
+	}
+};
+
+template<>
+struct std::formatter<mg7x::ReadResult>
+{
+	constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }
+	template<class FormatContext> auto format(const mg7x::ReadResult & res, FormatContext & ctx) const
+	{
+		switch (res) {
+			case mg7x::ReadResult::RD_UNSET:      return std::format_to(ctx.out(), "RD_UNSET");
+			case mg7x::ReadResult::RD_OK:         return std::format_to(ctx.out(), "RD_OK");
+			case mg7x::ReadResult::RD_INCOMPLETE: return std::format_to(ctx.out(), "RD_INCOMPLETE");
+			case mg7x::ReadResult::RD_ERR_IPC:    return std::format_to(ctx.out(), "RD_ERR_IPC");
+			case mg7x::ReadResult::RD_ERR_LOGIC:  return std::format_to(ctx.out(), "RD_ERR_LOGIC");
+			case mg7x::ReadResult::RD_ERR_ALLOC:  return std::format_to(ctx.out(), "RD_ERR_ALLOC");
+			default:
+				break;
+		}
+		return std::format_to(ctx.out(), "UNHANDLED.ReadResult({})", static_cast<int>(res));
+	}
+};
+
+template<>
+struct std::formatter<mg7x::KdbMsgType>
+{
+	constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }
+	template<class FormatContext> auto format(const mg7x::KdbMsgType & kmt, FormatContext & ctx) const
+	{
+		switch (kmt) {
+			case mg7x::KdbMsgType::ASYNC:    return std::format_to(ctx.out(), "ASYNC");
+			case mg7x::KdbMsgType::RESPONSE: return std::format_to(ctx.out(), "RESPONSE");
+			case mg7x::KdbMsgType::SYNC:     return std::format_to(ctx.out(), "SYNC");
+			default:
+				break;
+		}
+		return std::format_to(ctx.out(), "UNHANDLED.KdbMsgType({})", static_cast<int>(kmt));
+	}
+};
+
+template<>
+struct std::formatter<mg7x::ReadMsgResult>
+{
+	constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }
+	template<class FormatContext> auto format(const mg7x::ReadMsgResult & rmr, FormatContext & ctx) const
+	{
+		mg7x::KdbBase *msg = rmr.message.get();
+		mg7x::KdbType typ = (nullptr == msg) ? mg7x::KdbType::UNSET : msg->m_typ;
+		return std::format_to(ctx.out(), "({};{};{})", rmr.msg_typ, rmr.result, typ);
+	}
+
+};
+
 // https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2019/p0645r10.html
 template<std::derived_from<mg7x::KdbBase> Derived, typename CharT>
 struct std::formatter<Derived, CharT> {
@@ -2227,84 +2475,5 @@ struct std::formatter<mg7x::KdbProjection>
 		return std::format_to(ctx.out(), "{}", tmp);
 	}
 };
-
-//-------------------------------------------------------------------------------- namespace mg7x
-namespace mg7x {
-
-class KdbIpcDecompressor
-{
-	uint64_t m_ipc_len;
-	uint64_t m_msg_len;
-
-	uint32_t m_idx{0};   // i
-	uint64_t m_off{0};   // s
-	uint64_t m_rdx{0};   // tracks offset into src message
-	uint64_t m_chx{0};   // p: tracks the trailing cache-pointer 
-	uint32_t m_bit{0};   // f
-	uint32_t m_lbh[256]; // aa
-
-	std::unique_ptr<int8_t[]> m_dst;
-
-	public:
-		KdbIpcDecompressor(uint64_t ipc_len, uint64_t msg_len, std::unique_ptr<int8_t[]> dst);
-		uint64_t blockReadSz(ReadBuf & buf) const;
-		uint64_t uncompress(ReadBuf & buf);
-		bool isComplete() const;
-		uint64_t getUsedInputCount() const;
-		ReadBuf getReadBuf(int64_t csr) const;
-};
-
-struct ReadMsgResult
-{
-	ReadResult               result;
-	uint64_t                 bytes_consumed;
-	std::unique_ptr<KdbBase> message;
-};
-
-class KdbIpcMessageReader
-{
-	KdbMsgType m_msg_typ;
-	uint64_t   m_ipc_len{0};
-	uint64_t   m_msg_len{0};
-	uint64_t   m_byt_usd{0};
-	uint64_t   m_byt_dez{0};
-	bool       m_compressed;
-	std::unique_ptr<KdbBase> m_msg;
-	std::unique_ptr<KdbIpcDecompressor> m_inflater;
-
-	bool readMsgHdr(ReadBuf & buf, ReadMsgResult & result);
-	bool readMsgData(ReadBuf & buf, ReadMsgResult & result);
-	bool readMsgData1(ReadBuf & buf, ReadMsgResult & result);
-
-	public:
-		bool readMsg(const void *src, uint64_t len, ReadMsgResult & result);
-		uint64_t getIpcLength() const;
-		uint64_t getInputBytesConsumed() const;
-		uint64_t getMsgBytesDeserialized() const;
-
-
-};
-
-struct KdbUtil
-{
-	static
-	size_t writeLoginMsg(std::string_view usr, std::string_view pwd, std::unique_ptr<char> & ptr);
-};
-
-class KdbIpcMessageWriter
-{
-	KdbMsgType               m_msg_typ;
-	size_t                   m_ipc_len;
-	std::shared_ptr<KdbBase> m_root;
-	size_t                   m_byt_rem;
-
-	public:
-		KdbIpcMessageWriter(KdbMsgType msg_typ, std::shared_ptr<KdbBase> msg);
-
-		size_t bytesRemaining() const;
-		WriteResult write(void *dst, size_t cap);
-};
-//-------------------------------------------------------------------------------- /namespace
-}; // end namespace mg7x (again)
 
 #endif // defined __mg7x_KdbType__H__
