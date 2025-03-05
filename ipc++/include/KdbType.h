@@ -28,6 +28,7 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 #include <cstdint>
 #include <chrono>
 #include <cstring> // memcpy
+#include <unordered_set>
 
 namespace mg7x {
 
@@ -41,6 +42,7 @@ constexpr static int32_t SZ_FLOAT    =  8;
 constexpr static int32_t SZ_VEC_META =  5;
 constexpr static int32_t SZ_VEC_HDR  =  SZ_BYTE + SZ_VEC_META;
 constexpr static int32_t SZ_MSG_HDR  =  8;
+constexpr static int32_t SZ_JNL_HDR  =  8;
 
 constexpr int16_t NULL_SHORT     = std::bit_cast<int16_t>((unsigned short)0x8000);
 constexpr int16_t POS_INF_SHORT  = std::bit_cast<int16_t>((unsigned short)0x7fff);
@@ -1445,8 +1447,6 @@ class KdbIpcMessageReader
 		uint64_t getInputBytesConsumed() const;
 		uint64_t getInputBytesRemaining() const;
 		uint64_t getMsgBytesDeserialized() const;
-
-
 };
 
 struct KdbUtil
@@ -1470,6 +1470,16 @@ class KdbIpcMessageWriter
 
 		size_t bytesRemaining() const;
 		WriteResult write(void *dst, size_t cap);
+};
+
+class KdbJournalReader
+{
+	public:
+		static
+		int64_t msg_len(const int8_t *src, const uint64_t rem);
+
+		static
+		int64_t filter_msg(const int8_t *src, const uint64_t rem, const std::string_view & fn_name, const std::unordered_set<std::string_view> & tbl_names);
 };
 
 //-------------------------------------------------------------------------------- KdbQuirks

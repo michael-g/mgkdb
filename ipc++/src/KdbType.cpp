@@ -15,6 +15,15 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 */
 
 #include "KdbType.h"
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L // strnlen
+#endif
+
+//#ifndef _GNU_SOURCE
+//#define _GNU_SOURCE // strnlen
+//#endif
+
+#include <string.h>
 #include <algorithm>
 #include <bit>
 #include <cstdint>
@@ -2306,6 +2315,226 @@ WriteResult KdbIpcMessageWriter::write(void *dst, size_t cap)
 	m_byt_rem -= buf.cursorOff();
 	return wr;
 }
+//-------------------------------------------------------------------------------- KdbJournalReader
+struct vec_hdr_s {
+	int8_t typ; int8_t att; int32_t len;
+} __attribute__((packed));
 
+static int64_t msg_len_vary(const int8_t *src, const uint64_t rem)
+{
+	if (0 == rem)
+		return -1;
+	int32_t len, tmp;
+	KdbType typ = static_cast<KdbType>(*src);
+	switch(typ) {
+		case KdbType::TABLE:
+			return 2 + msg_len_vary(src + 2, rem - 2);
+		case KdbType::DICT:
+			if (0 > (len = KdbJournalReader::msg_len(src + 1, rem - 1)))
+				return len;
+			if (0 > (tmp = KdbJournalReader::msg_len(src + 1, rem - 1)))
+				return tmp;
+			return SZ_BYTE + len + tmp;
+		default: break;
+	}
+	return -2;
+}
+
+static int64_t msg_len_sym_atom(const int8_t *src, const uint64_t rem)
+{
+	if (rem < SZ_BYTE + SZ_BYTE)
+		return -1;
+	const size_t max = rem - SZ_BYTE;
+	const size_t len = strnlen(reinterpret_cast<const char*>(src + SZ_BYTE), max);
+	if (max == len)
+		return -1;
+	return SZ_BYTE + len + SZ_BYTE;
+}
+
+static int64_t msg_len_sym_vec(const int8_t *src, const uint64_t rem)
+{
+	if (rem < SZ_VEC_HDR)
+		return -1;
+	const struct vec_hdr_s *hdr = reinterpret_cast<const struct vec_hdr_s*>(src);
+	const int32_t len = hdr->len;
+
+	size_t off = SZ_VEC_HDR;
+
+	for (int32_t i = 0 ; i < len ; i++) {
+		const size_t max = static_cast<size_t>(rem - off);
+		const size_t sln = strnlen(reinterpret_cast<const char*>(src + off), max);
+		if (max == sln)
+			return -1;
+		off += sln + SZ_BYTE;
+	}
+	return off;
+}
+
+static int64_t msg_len_list(const int8_t *src, const uint64_t rem)
+{
+	if (rem < SZ_VEC_HDR)
+		return -1;
+	const struct vec_hdr_s *hdr = reinterpret_cast<const struct vec_hdr_s*>(src);
+	const int32_t cnt = hdr->len;
+	int64_t len  = SZ_VEC_HDR;
+	for (int32_t i = 0 ; i < cnt ; i++) {
+		int64_t eln = KdbJournalReader::msg_len(src + len, rem - len);
+		if (0 > eln)
+			return eln;
+		len += eln;
+	}
+	return len;
+}
+
+constexpr static int64_t msg_len_cmp(const int32_t len, const size_t width, const uint64_t rem)
+{
+	if (len < 0)
+		return -1;
+
+	const uint32_t ulen = static_cast<uint32_t>(len);
+
+	if (SZ_VEC_HDR + ulen > rem)
+		return -1;
+	return SZ_VEC_HDR + ulen * width;
+}
+
+static int64_t msg_len_vec(const int8_t *src, const uint64_t rem)
+{
+	if (rem < SZ_VEC_HDR)
+		return -1;
+
+	const struct vec_hdr_s *hdr = reinterpret_cast<const struct vec_hdr_s*>(src);
+	const int32_t len = hdr->len;
+	
+	KdbType typ = static_cast<KdbType>(*src);
+	switch(typ) {
+		case KdbType::BOOL_VECTOR:
+		case KdbType::BYTE_VECTOR:
+		case KdbType::CHAR_VECTOR:
+			return msg_len_cmp(len, SZ_BYTE, rem);
+		case KdbType::SHORT_VECTOR:
+			return msg_len_cmp(len, SZ_SHORT, rem);
+		case KdbType::INT_VECTOR:
+		case KdbType::REAL_VECTOR:
+		case KdbType::DATE_VECTOR:
+		case KdbType::MONTH_VECTOR:
+		case KdbType::MINUTE_VECTOR:
+		case KdbType::SECOND_VECTOR:
+		case KdbType::TIME_VECTOR:
+			return msg_len_cmp(len, SZ_INT, rem);
+		case KdbType::LONG_VECTOR:
+		case KdbType::FLOAT_VECTOR:
+		case KdbType::TIMESTAMP_VECTOR:
+		case KdbType::TIMESPAN_VECTOR:
+			return msg_len_cmp(len, SZ_LONG, rem);
+		case KdbType::GUID_VECTOR:
+			return msg_len_cmp(len, SZ_GUID, rem);
+		default:
+			break;
+	}
+	return -2;
+}
+
+static int64_t msg_len_atom(const int8_t *src, const uint64_t rem)
+{
+	if (0 == rem)
+		return -1;
+
+	KdbType typ = static_cast<KdbType>(*src);
+	switch (typ) {
+		case KdbType::GUID_ATOM:         return SZ_BYTE + SZ_GUID;
+		case KdbType::BOOL_ATOM:
+		case KdbType::BYTE_ATOM:
+		case KdbType::CHAR_ATOM:
+		case KdbType::UNARY_PRIMITIVE:
+		case KdbType::BINARY_PRIMITIVE:
+		case KdbType::TERNARY_PRIMITIVE: return SZ_BYTE + SZ_BYTE;
+		case KdbType::SHORT_ATOM:        return SZ_BYTE + SZ_SHORT;
+		case KdbType::INT_ATOM:
+		case KdbType::REAL_ATOM:
+		case KdbType::DATE_ATOM:
+		case KdbType::MONTH_ATOM:
+		case KdbType::MINUTE_ATOM:
+		case KdbType::SECOND_ATOM:
+		case KdbType::TIME_ATOM:         return SZ_BYTE + SZ_INT;
+		case KdbType::LONG_ATOM:
+		case KdbType::FLOAT_ATOM:
+		case KdbType::TIMESTAMP_ATOM:
+		case KdbType::TIMESPAN_ATOM:     return SZ_BYTE + SZ_LONG;
+		default:
+			break;
+	}
+	return -2;
+}
+
+int64_t KdbJournalReader::msg_len(const int8_t *src, const uint64_t rem)
+{
+	if (0 == rem)
+		return -1;
+
+	KdbType typ = static_cast<KdbType>(src[0]);
+	if (KdbType::LIST == typ) {
+		return msg_len_list(src, rem);
+	}
+
+	if ((src[0] >= static_cast<int8_t>(KdbType::TIME_ATOM) &&
+	     src[0] < static_cast<int8_t>(KdbType::LIST))) {
+		if (typ == KdbType::SYMBOL_ATOM)
+				return msg_len_sym_atom(src, rem);
+		return msg_len_atom(src, rem);
+	}
+
+	if (src[0] > static_cast<int8_t>(KdbType::LIST) &&
+	     src[0] <= static_cast<int8_t>(KdbType::TIME_VECTOR)) {
+		if (typ == KdbType::SYMBOL_VECTOR)
+				return msg_len_sym_vec(src, rem);
+		return msg_len_vec(src, rem);
+	}
+
+	return msg_len_vary(src, rem);
+}
+
+int64_t KdbJournalReader::filter_msg(const int8_t *src, const uint64_t rem, const std::string_view & fn_name,
+                                        const std::unordered_set<std::string_view> & tbl_names)
+{
+	const int64_t len = KdbJournalReader::msg_len(src, rem);
+	if (len < 0)
+		return len;	
+	const struct vec_hdr_s *hdr = reinterpret_cast<const struct vec_hdr_s*>(src);
+
+	if (KdbType::LIST != static_cast<KdbType>(hdr->typ))
+		return -len;
+
+	const int32_t vln = hdr->len;
+	if (vln < 3)
+		return -len;
+
+	uint64_t off = SZ_VEC_HDR;
+
+	if (KdbType::SYMBOL_ATOM != static_cast<KdbType>(src[off]))
+		return -len;
+
+	off += SZ_BYTE;
+
+	const size_t fln = strlen(reinterpret_cast<const char*>(src+off));
+	if (fln != fn_name.length())
+		return -len;
+
+	if (0 != strncmp(fn_name.data(), reinterpret_cast<const char*>(src+off), fln))
+		return -len;
+
+	off += fln + SZ_BYTE;
+
+	if (KdbType::SYMBOL_ATOM != static_cast<KdbType>(src[off]))
+		return -len;
+
+	off += SZ_BYTE;
+
+	std::string_view tbl{reinterpret_cast<const char*>(src+off)};
+	if (tbl_names.find(tbl) != tbl_names.end()) {
+		return len;
+	}
+	return -len;
+}
 //-------------------------------------------------------------------------------- end namespace mg7x
 }

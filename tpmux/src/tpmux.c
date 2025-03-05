@@ -1,4 +1,6 @@
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE // memfd_create
+#endif
 
 #include <stdlib.h>     // ExiT_SUCCESS
 #include <stddef.h>     // NULL

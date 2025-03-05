@@ -1,6 +1,16 @@
 #include <stdlib.h> // EXIT_SUCCESS
 
 #include <stdint.h>
+#include <fcntl.h> // open
+#include <sys/sendfile.h> // sendfile
+#include <sys/stat.h> // fstat
+#include <sys/mman.h> // mmap
+#include <unistd.h> // lseek, write
+#include <string.h>
+#include <errno.h>
+
+#include <unordered_set> // std::unordered_set
+#include <algorithm> // std::copy
 
 #include "mg_fmt_defs.h"
 #include "mg_coro_epoll.h"
@@ -24,8 +34,143 @@ static int monitor_close(int fd)
   return -1;
 }
 
+static int cp_sgmt(const int dst_fd, const int src_fd, const uint64_t src_off, const size_t len)
+{
+  off_t l_src_off = static_cast<off_t>(src_off);
+  ssize_t wrz = sendfile(dst_fd, src_fd, &l_src_off, len);
+  if (-1 == wrz) {
+    ERR_PRINT("failed in sendfile; dst_fd {}, src_fd {}, src_off: {}, len: {}: {}", dst_fd, src_fd, src_off, len, strerror(errno));
+    return -1;
+  }
+  if (static_cast<size_t>(wrz) != len) {
+    // doubt we'll hit this...
+    ERR_PRINT("mismatch between length reported by sendfile and write-length requested; {} != {}", wrz, len);
+    return -1;
+  }
+  return 0;
+}
 
-Task<int> kdb_subscribe(EpollCtl & epoll, const char * service, const char * user, std::vector<std::string_view> & tables)
+static int64_t check_match(const int8_t *ptr, size_t rem)
+{
+  return 0;
+}
+
+static int filter_msgs(const int src_fd, const uint64_t msg_count, const int jnl_fd, const std::unordered_set<std::string_view> & tbls)
+{
+  struct stat sbuf{};
+  int err = fstat(src_fd, &sbuf);
+  if (-1 == err) {
+    ERR_PRINT("failed in fstat over source-journal on FD {}: {}", src_fd, strerror(errno));
+    return -1;
+  }
+
+  void *const addr = mmap(NULL, sbuf.st_size, PROT_READ, MAP_PRIVATE|MAP_POPULATE, src_fd, 0);
+  if (MAP_FAILED == addr) {
+    ERR_PRINT("failed in mmap; size {}, FD {}: {}", sbuf.st_size, src_fd, strerror(errno));
+    return -1;
+  }
+
+  int8_t *ptr = static_cast<int8_t*>(addr);
+
+  // skip the 8-byte header ... 
+  uint64_t off = mg7x::SZ_JNL_HDR;
+  uint64_t len = 0;
+
+#ifndef _MG_LOG_JNL_TESTS_ // TODO revert from 'ifndef' to 'ifdef'
+#define JNL_LOG(...) DBG_PRINT(__VA_ARGS__)
+#else
+#define JNL_LOG(...)
+#endif
+
+  const std::string_view fn_name{"upd"};
+
+  for (uint64_t i = 0 ; i < msg_count ; i++) {
+    JNL_LOG("check_match({}, {})", (void*)(ptr + off + len),  sbuf.st_size - (off + len));
+    int64_t rtn = KdbJournalReader::filter_msg(ptr + off + len, sbuf.st_size - (off + len), fn_name, tbls);
+    if (-2 == rtn) {
+      goto err_jnl_ipc;
+    }
+    if (rtn < 0 || i == msg_count - 1) {
+      if (len > 0) {
+        JNL_LOG("cp_sgmt({}, {}, {}, {})", jnl_fd, src_fd, off, len);
+        int err = cp_sgmt(jnl_fd, src_fd, off, len);
+        if (-1 == err) {
+          goto err_cp;
+        }
+      }
+      off += len - rtn;
+      len = 0;
+    }
+    else {
+      len += rtn;
+    }
+  }
+#undef JNL_LOG
+
+  munmap(addr, sbuf.st_size);
+  return 0;
+
+err_jnl_ipc:
+err_cp:
+  munmap(addr, sbuf.st_size);
+  return -1;
+}
+
+static int init_jnl(const std::string_view & path)
+{
+  char buf[path.length() + 1];
+  std::copy(path.begin(), path.end(), buf);
+  buf[path.length()] = 0;
+  int jfd = open(buf, O_CREAT|O_RDWR, S_IRUSR|S_IWUSR);
+  if (-1 == jfd) {
+    ERR_PRINT("failed to open/create file {}: {}", path, strerror(errno));
+    return -1;
+  }
+
+  DBG_PRINT("opened dest-journal {} as FD {}", path, jfd);
+
+  struct stat sbuf{};
+  int err = fstat(jfd, &sbuf);
+  if (-1 == err) {
+    ERR_PRINT("failed in fstat: {}", strerror(errno));
+    goto err_fstat;
+  }
+
+  if (0 == sbuf.st_size) {
+    struct {
+      int8_t one = 0xff;
+      int8_t two = 0x01;
+      int16_t typ = 0;
+      int32_t hdr = 0;
+    } __attribute__((packed)) header;
+
+    TRA_PRINT("writing dest-journal-header");
+    ssize_t wsz = write(jfd, &header, sizeof(header));
+    if (-1 == wsz) {
+      ERR_PRINT("failed to write journal-header: {}", strerror(errno));
+      goto err_write;
+    }
+    DBG_PRINT("wrote dest-journal-header, size {}", sizeof(header));
+  }
+  else {
+    DBG_PRINT("dest-journal size is {}", sbuf.st_size);
+    off_t off = lseek(jfd, sbuf.st_size, SEEK_SET);
+    if (-1 == off) {
+      ERR_PRINT("failed in lseek: {}", strerror(errno));
+      goto err_lseek;
+    }
+  }
+
+  return jfd;
+
+err_write:
+err_lseek:
+err_fstat:
+  close(jfd);
+  return -1;
+}
+
+Task<int> kdb_subscribe(EpollCtl & epoll, const char * service, const char * user, std::vector<std::string_view> & tables, const char *dst_path)
 {
   Task<int> task = kdb_connect(epoll, "localhost", service, user);
 
@@ -112,12 +257,41 @@ Task<int> kdb_subscribe(EpollCtl & epoll, const char * service, const char * use
     co_return monitor_close(sock_fd);
   }
 
+  const mg7x::KdbLongAtom *msg_count = dynamic_cast<const mg7x::KdbLongAtom*>(lst->getObj(0));
   const mg7x::KdbSymbolAtom *path = dynamic_cast<const mg7x::KdbSymbolAtom*>(lst->getObj(1));
-  INF_PRINT(CYN "kdb_subscribe" RST ": TP journal is at {}", path->m_val);
+
+  INF_PRINT(CYN "kdb_subscribe" RST ": TP message-count is {}, journal is at {}", msg_count->m_val, path->m_val);
   
+  size_t pth_off = 0;
+  if (':' == path->m_val.at(0) && path->m_val.length() > 1) 
+    pth_off = path->m_val.find_first_not_of(":");
+
   // unpack the journal location, open, scan for tables, rewrite into ours
+  int jfd = init_jnl(dst_path);
+  if (-1 == jfd) {
+    ERR_PRINT("failed to open journal {}; closing FD {}", *path, sock_fd);
+    co_return monitor_close(sock_fd);
+  }
 
   DBG_PRINT(CYN "kdb_subscribe" RST ": co_return {}", sock_fd);
+
+  const std::string_view src_path{path->m_val.c_str() + pth_off};
+  int src_fd = open(src_path.data(), O_RDONLY);
+  if (-1 == src_fd) {
+    ERR_PRINT("failed in open; path was '{}': {}", path->m_val.c_str(), strerror(errno));
+    co_return monitor_close(sock_fd);
+  }
+  DBG_PRINT("opened src-journal {} as FD {}", src_path, src_fd);
+
+  const std::unordered_set<std::string_view> names{tables.begin(), tables.end()};
+  if (msg_count->m_val > 0) {
+    int err = filter_msgs(src_fd, static_cast<uint64_t>(msg_count->m_val), jfd, names);
+    if (-1 == err) {
+      ERR_PRINT("while filtering journal messages; closing FDs {} and {}", jfd, sock_fd);
+      close(jfd);
+      co_return monitor_close(sock_fd);
+    }
+  }
 
   co_return sock_fd;
 }
@@ -133,8 +307,8 @@ int tpmux_main(int argc, char **argv)
   }
 
   EpollCtl ctl{epollfd};
-  std::vector<std::string_view> tbs{"trade", "quote"};
-  Task<int> task = kdb_subscribe(ctl, "30099", "michaelg", tbs);
+  std::vector<std::string_view> tbs{"trade",};
+  Task<int> task = kdb_subscribe(ctl, "30099", "michaelg", tbs, "/home/michaelg/tmp/dst.journal");
   TopLevelTask tlt = TopLevelTask::await(task);
 
   struct epoll_event events[MAX_EVENTS];

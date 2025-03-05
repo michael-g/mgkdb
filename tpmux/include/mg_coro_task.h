@@ -20,7 +20,6 @@ public:
         return false;
       }
       std::coroutine_handle<> await_suspend(std::coroutine_handle<Promise> h) noexcept {
-      // bool await_suspend(std::coroutine_handle<Promise> h) noexcept {
         TRA_PRINT(MAG "Task" RST "::" YEL "Promise" RST "::" RED "FinalAwaiter" RST "::await_suspend; h ? {}, h.done? {}, h.address {}, h.promise.p_cont.address {}", !!h, h && h.done(), h.address(), h.promise().p_cont.address());
         if (nullptr == h.promise().p_cont) {
           WRN_PRINT(MAG "Task" RST "::" YEL "Promise" RST "::" RED "FinalAwaiter" RST "::await_suspend; NULL continuation");
