@@ -76,10 +76,10 @@ static int filter_msgs(const int src_fd, const uint64_t msg_count, const int jnl
   uint64_t off = mg7x::SZ_JNL_HDR;
   uint64_t len = 0;
 
-#ifndef _MG_LOG_JNL_TESTS_ // TODO revert from 'ifndef' to 'ifdef'
-#define JNL_LOG(...) DBG_PRINT(__VA_ARGS__)
-#else
+#ifndef _MG_LOG_JNL_TESTS_
 #define JNL_LOG(...)
+#else
+#define JNL_LOG(...) DBG_PRINT(__VA_ARGS__)
 #endif
 
   const std::string_view fn_name{"upd"};
@@ -307,12 +307,21 @@ int tpmux_main(int argc, char **argv)
   }
 
   EpollCtl ctl{epollfd};
-  std::vector<std::string_view> tbs{"trade",};
-  Task<int> task = kdb_subscribe(ctl, "30099", "michaelg", tbs, "/home/michaelg/tmp/dst.journal");
-  TopLevelTask tlt = TopLevelTask::await(task);
+  const char *dst_jnl = "/home/michaelg/tmp/dst.journal";
+
+  std::vector<std::string_view> tbs99{"trade",};
+  Task<int> task99 = kdb_subscribe(ctl, "30099", "michaelg", tbs99, dst_jnl);
+
+  std::vector<std::string_view> tbs98{"position",};
+  Task<int> task98 = kdb_subscribe(ctl, "30098", "michaelg", tbs98, dst_jnl);
+
+  TaskContainer tasks{};
+  tasks.add(task99);
+  tasks.add(task98);
+  // TopLevelTask tlt = TopLevelTask::await(task99);
 
   struct epoll_event events[MAX_EVENTS];
-  while (!tlt.done()) {
+  while (!tasks.complete()) {
     TRA_PRINT("main: calling epoll_wait");
     int nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
     if (-1 == nfds) {
@@ -332,7 +341,7 @@ int tpmux_main(int argc, char **argv)
     }
   }
 
-  tlt.done();
+  // tasks.done();
 
   return EXIT_SUCCESS;
 }

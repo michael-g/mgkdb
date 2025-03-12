@@ -1,7 +1,9 @@
+#include <cstddef>
 #ifndef __mg_coro_task__H__
 
-#include <coroutine>
+#include <coroutine> // also std::hash
 #include <utility> // std::exchange
+#include <vector>
 
 #include "mg_fmt_defs.h"
 
@@ -178,21 +180,20 @@ struct TopLevelTask
   explicit TopLevelTask(std::coroutine_handle<Policy> h) noexcept
    : m_handle{h}
   {
-    TRA_PRINT(CYN "TopLevelTask" RST "::" CYN "TopLevelTask" RST ": m_handle.address {}", m_handle.address());
+    TRA_PRINT(CYN "TopLevelTask" RST "::" CYN "TopLevelTask" RST "(handle): m_handle.address {}", m_handle.address());
   }
-
-  TopLevelTask(TopLevelTask & rhs) = delete;
-  TopLevelTask(const TopLevelTask & rhs) = delete;
-
-  TopLevelTask(TopLevelTask && rhs) noexcept
+  explicit TopLevelTask(TopLevelTask && rhs) noexcept
    : m_handle{std::exchange(rhs.m_handle, {})}
   {
-    TRA_PRINT(CYN "TopLevelTask" RST "::" CYN "TopLevelTask " RED "&&" RST ": m_handle.address {}", m_handle.address());
+    TRA_PRINT(CYN "TopLevelTask" RST "::" CYN "TopLevelTask" RST "(" RED "&&" RST "): m_handle.address {}", m_handle.address());
   }
 
-  TopLevelTask operator=(TopLevelTask) = delete;
-  TopLevelTask& operator=(TopLevelTask&) = delete;
-  TopLevelTask& operator=(const TopLevelTask&) = delete;
+  TopLevelTask& operator=(TopLevelTask && rhs) noexcept
+  {
+    TRA_PRINT(CYN "TopLevelTask" RST "::" CYN "operator" RST "=(" RED "&&" RST "): m_handle.address {}", m_handle.address());
+    m_handle = std::exchange(rhs.m_handle, {});
+    return *this;
+  }
 
   ~TopLevelTask() {
     TRA_PRINT(CYN "TopLevelTask" RST "::" CYN "~TopLevelTask" RST ": m_handle.address {}", m_handle.address());
@@ -203,17 +204,49 @@ struct TopLevelTask
 
   template<typename T>
   static
-  TopLevelTask await(Task<T> & task) {
+  TopLevelTask await(Task<T> & task) noexcept {
     TRA_PRINT(CYN "TopLevelTask" RST "::await: task.address {}", task.address());
-    co_await task; // std::move(task);
+    co_await task;
   }
 
-  bool done() {
+  bool done() const noexcept {
     TRA_PRINT(CYN "TopLevelTask" RST "::done: m_handle.done? {}", m_handle.done());
     return m_handle.done();
   }
 
   std::coroutine_handle<Policy> m_handle;
+};
+
+class TaskContainer
+{
+  std::vector<TopLevelTask> m_tasks;
+
+public:
+
+  template<typename T>
+  void add(Task<T> & task) noexcept
+  {
+    m_tasks.push_back(TopLevelTask::await(task));
+  }
+
+  bool complete() noexcept
+  {
+    bool all_done = true;
+    for (auto it0 = m_tasks.begin() ; it0 != m_tasks.end() ; ) {
+      bool done = it0->done();
+      if (done) {
+        TRA_PRINT(YEL "TaskContainer" RST "::complete: removing TopLevelTask from vector: {}", it0->m_handle.address());
+        it0 = m_tasks.erase(it0);
+      }
+      else {
+        it0++;
+        all_done = false;
+      }
+    }
+
+    return all_done;
+  }
+
 };
 
 }; // end namespace mg7x
