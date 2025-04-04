@@ -1441,12 +1441,13 @@ class KdbIpcMessageReader
 	bool readMsgData(ReadBuf & buf, ReadMsgResult & result);
 	bool readMsgData1(ReadBuf & buf, ReadMsgResult & result);
 
-	public:
-		bool readMsg(const void *src, uint64_t len, ReadMsgResult & result);
-		uint64_t getIpcLength() const;
-		uint64_t getInputBytesConsumed() const;
-		uint64_t getInputBytesRemaining() const;
-		uint64_t getMsgBytesDeserialized() const;
+public:
+	void reset();
+	bool readMsg(const void *src, uint64_t len, ReadMsgResult & result);
+	uint64_t getIpcLength() const;
+	uint64_t getInputBytesConsumed() const;
+	uint64_t getInputBytesRemaining() const;
+	uint64_t getMsgBytesDeserialized() const;
 };
 
 struct KdbUtil

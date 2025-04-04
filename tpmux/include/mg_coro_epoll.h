@@ -1,7 +1,7 @@
 #ifndef __mg_coro_epoll__H__
+#define __mg_coro_epoll__H__
 
 #include <sys/epoll.h>
-// #include <string.h>
 #include <coroutine>
 #include <utility> // std::pair
 #include <functional> // std::function, std::bind

@@ -2125,6 +2125,16 @@ ReadBuf KdbIpcDecompressor::getReadBuf(int64_t csr) const
 	return ReadBuf{m_dst.get(), m_off, csr};
 }
 //-------------------------------------------------------------------------------- KdbIpcMessageReader
+void KdbIpcMessageReader::reset()
+{
+	m_ipc_len = 0;
+	m_msg_len = 0;
+	m_byt_usd = 0;
+	m_byt_dez = 0;
+	m_compressed = false;
+	m_msg.reset();
+	m_inflater.reset();
+}
 
 bool KdbIpcMessageReader::readMsgHdr(ReadBuf & buf, ReadMsgResult & result)
 {

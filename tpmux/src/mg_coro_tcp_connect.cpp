@@ -1,28 +1,25 @@
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
 #include <stdint.h>
-#include <unistd.h>
-#include <signal.h>
-#include <netdb.h> // getaddrinfo_a, getaddrinfo
-#include <sys/eventfd.h>
-#include <sys/socket.h> // getaddrinfo
-#include <sys/types.h> // getaddrinfo
+#include <signal.h> // struct sigevent
+#include <sys/eventfd.h> // args to eventfd()
+#include <sys/socket.h> // args to socket, struct addrinfo
+#include <netdb.h> // struct gaicb
 #include <arpa/inet.h> // inet_ntop
 #include <string.h>
 #include <errno.h>
 
-#include <utility> // std::exchange
+// #include <utility> // std::exchange
 
 #include "mg_fmt_defs.h"
+#include "mg_io.h"
 #include "mg_coro_task.h"
 #include "mg_coro_epoll.h"
 
 static void mg_sigev_notify(union sigval arg) {
   int64_t val = 1;
-  TRA_PRINT(YEL "mg_sigev_notify" RST ": calling write({}, &val, {})", arg.sival_int, sizeof(val));
-  int err = write(arg.sival_int, &val, sizeof(val)); 
+  std::span<int8_t> buf{reinterpret_cast<int8_t*>(&val), sizeof(val)};
+  TRA_PRINT(YEL "mg_sigev_notify" RST ": calling IO::write({}, {{&val, {}}})", arg.sival_int, sizeof(val));
+
+  int err = mg7x::IO::write(arg.sival_int, buf); 
   if (-1 == err) {
     ERR_PRINT(YEL "mg_sigev_notify" RST ": failed to write 1 byte to m_eventfd {}: {}", arg.sival_int, strerror(errno));
   }
@@ -52,7 +49,7 @@ static void mg_print_addrinfo(struct addrinfo *nfo)
 
 static int create_event_fd()
 {
-  int ret = eventfd(0, EFD_NONBLOCK|EFD_SEMAPHORE);
+  int ret = mg7x::IO::eventfd(0, EFD_NONBLOCK|EFD_SEMAPHORE);
   if (-1 == ret) {
     ERR_PRINT("failed in eventfd: {}", strerror(errno));
   }
@@ -100,7 +97,7 @@ Task<int> tcp_connect(EpollCtl & epoll, const char *host, const char *service)
 
     DBG_PRINT(GRN "tcp_connect" RST ": calling getaddrinfo_a(..)");
 
-    getaddrinfo_a(GAI_NOWAIT, gai_reqs, 1, &sevp);
+    IO::getaddrinfo_a(GAI_NOWAIT, gai_reqs, 1, &sevp);
 
     DBG_PRINT(GRN "tcp_connect" RST ": co_await EpollCtl::Awaiter{{event_fd = {}}}", event_fd);
     auto [fd, events] = co_await awaiter;
@@ -120,13 +117,13 @@ Task<int> tcp_connect(EpollCtl & epoll, const char *host, const char *service)
   for ( ; nullptr != res ; res = res->ai_next) {
     TRA_PRINT(GRN "tcp_connect" RST ": opening socket");
     mg_print_addrinfo(res);
-    int sock_fd = socket(res->ai_family, res->ai_socktype | SOCK_NONBLOCK, res->ai_protocol);
+    int sock_fd = IO::socket(res->ai_family, res->ai_socktype | SOCK_NONBLOCK, res->ai_protocol);
     if (-1 == sock_fd) {
       WRN_PRINT(GRN "tcp_connect" RST ": failed to create socket({}, {}, {}): {}", res->ai_family, res->ai_socktype, res->ai_protocol, strerror(errno));
       continue;
     }
     TRA_PRINT(GRN "tcp_connect" RST ": calling connect");
-    int err = connect(sock_fd, res->ai_addr, res->ai_addrlen);
+    int err = IO::connect(sock_fd, res->ai_addr, res->ai_addrlen);
     if (-1 == err && EINPROGRESS != errno && EAGAIN != errno) { // EINPROGRESS for SOCK_STREAM, EAGAIN for UNIX domain sockets
       ERR_PRINT(GRN "tcp_connect" RST ": signalled by 'connect', errno is {}: {}", errno, strerror(errno));
       close(sock_fd);

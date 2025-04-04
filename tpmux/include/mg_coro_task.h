@@ -1,5 +1,6 @@
 #include <cstddef>
 #ifndef __mg_coro_task__H__
+#define __mg_coro_task__H__
 
 #include <coroutine> // also std::hash
 #include <utility> // std::exchange

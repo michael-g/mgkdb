@@ -1,8 +1,8 @@
-#include <unistd.h>
 
 #include <utility> // std::exchange
 #include <string.h>
 
+#include "mg_io.h"
 #include "mg_coro_task.h"
 #include "mg_coro_epoll.h"
 #include "mg_fmt_defs.h"
@@ -20,7 +20,6 @@ Task<int> kdb_connect(EpollCtl & epoll, const char * host, const char * service,
 
   int sock_fd = co_await task; // std::move(task);
 
-
   if (-1 == sock_fd) {
     WRN_PRINT(YEL "kdb_connect" RST ": sock_fd is {}", sock_fd);
     co_return sock_fd;
@@ -28,7 +27,7 @@ Task<int> kdb_connect(EpollCtl & epoll, const char * host, const char * service,
 
   DBG_PRINT(YEL "kdb_connect" RST ": beginning kdb-handshake using sock_fd {}", sock_fd);
 
-  std::array<char,128> creds{};
+  std::array<int8_t,128> creds{};
   size_t off = 0;
   size_t len = strlen(user);
 
@@ -54,10 +53,12 @@ Task<int> kdb_connect(EpollCtl & epoll, const char * host, const char * service,
 
   retry:
     DBG_PRINT(YEL "kdb_connect" RST ": writing credentials (attempt {})", retries);
-    ssize_t wrt = write(sock_fd, &creds[off], len);
+    // ssize_t wrt = write(sock_fd, &creds[off], len);
+    ssize_t wrt = IO::write(sock_fd, {&creds[off], len});
     if (-1 == wrt) {
       if (EWOULDBLOCK == errno || EAGAIN == errno) {
-        if (retries++ < 3) {
+        if (retries++ < 3) { 
+          // TODO [[unused-variable]]
           auto [events, fd] = co_await awaiter;
           // TODO test events
           goto retry;
@@ -78,13 +79,19 @@ Task<int> kdb_connect(EpollCtl & epoll, const char * host, const char * service,
     EpollCtl::Awaiter awaiter{sock_fd};
   
     int err = epoll.mod_interest(sock_fd, EPOLLIN, awaiter);
+    if (-1 == err) {
+      ERR_PRINT(YEL "kdb_connect" RST ": failed in epoll.mod_interest");
+      // TODO failure handling
+    }
 
     DBG_PRINT(YEL "kdb_connect" RST ": awaiting read-event on sock_fd");
     auto [fd, events] = co_await awaiter;
     // TODO check events for errors
   }
 
-  ssize_t red = read(sock_fd, &creds[0], 1);
+  std::span<int8_t> buf{&creds[0], 1};
+
+  ssize_t red = IO::read(sock_fd, buf);
   if (-1 == red) {
     // TOOD this should probably check for EAGAIN, probably not EWOULDBLOCK (given the size);
     ERR_PRINT(YEL "kdb_connect" RST ": while reading login-response: {}", strerror(errno));

@@ -1,4 +1,5 @@
-
+// Run like
+//  qq test/test_tp.q -p 30098 -sym test_pos -dst $PWD/logs
 .mg.sub:{[T;S]
   sch:$[T~`
        ;.mg.u.sub[;S] each tables`
@@ -40,7 +41,7 @@
  ;enlist lst
  }
 
-/H:hopen .[jnl:`$":/home/michaelg/dev/projects/github.com/mgkdb/tpmux/test/test_sym",string .z.D;();:;()]
+/H:hopen .[jnl:`$":/home/michaelg/dev/projects/github.com/mgkdb/tpmux/logs/test_sym",string .z.D;();:;()]
 /jnl:get jnl
 .mg.genMktData:{[H]
   H `upd,/:tbl,'.mg.genMsg[H;idx]'[til idx;tbl:(idx:100)?`trade`quote]
