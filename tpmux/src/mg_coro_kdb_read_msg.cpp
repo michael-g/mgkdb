@@ -1,3 +1,4 @@
+#include "mg_io.h"
 #include "mg_coro_epoll.h"
 #include "mg_coro_task.h"
 #include "mg_fmt_defs.h"
@@ -26,16 +27,16 @@ Task<mg7x::ReadMsgResult> kdb_read_message(EpollCtl & epoll, int fd, std::vector
     auto [_fd, rev] = co_await awaiter;
     if (rev & EPOLLERR) {
       ERR_PRINT("error signal from epoll: revents is {}; as yet unhandled, exiting", rev);
-      std::terminate();
+      throw io::EpollError("Error reported via revents");
     }
     TRA_PRINT(YEL "kdb_read_message" RST ": have read-signal");
 
-    ssize_t rdz = read(fd, ary.data(), mg7x::SZ_MSG_HDR);
+    ssize_t rdz = ::mg7x::io::read(fd, ary.data(), mg7x::SZ_MSG_HDR);
     TRA_PRINT(YEL "kdb_read_message" RST ": read {} bytes", rdz);
     if (-1 == rdz) {
       ERR_PRINT("failed during read: {}; exiting.", strerror(errno));
-      // check EINTR
-      std::terminate();
+      // TODO check EINTR
+      throw io::IoError("Failed in read");
     }
     tot += rdz;
     TRA_PRINT(YEL "kdb_read_message" RST ": read {} bytes in total", tot);
@@ -53,23 +54,25 @@ Task<mg7x::ReadMsgResult> kdb_read_message(EpollCtl & epoll, int fd, std::vector
     size_t len = std::min(ary.capacity() - off, rdr.getInputBytesRemaining());
     TRA_PRINT(YEL "kdb_read_message" RST ": requesting read of up to {} bytes at offset {}", len, off);
 
-    ssize_t rdz = read(fd, dst + off, len);
+    ssize_t rdz = ::mg7x::io::read(fd, dst + off, len);
     TRA_PRINT(YEL "kdb_read_message" RST ": read {} bytes", rdz);
 
     if (-1 == rdz) {
       if (EAGAIN == errno) {
         // would have blocked
         auto [_fd, rev] = co_await awaiter;
-        // TODO check rev
+        if (0 != (EPOLLERR & rev)) {
+          throw io::EpollError("Error raised by Epoll");
+        }
         continue;
       }
       else if (EINTR == errno) {
         INF_PRINT("placeholder, 'nyi: EINTR on FD {}, exiting", fd);
-        std::terminate();
+        throw io::IoError("Got EINTR during read (TODO:improve)");
       }
       else {
         ERR_PRINT("failed during read: {}; exiting.", strerror(errno));
-        std::terminate();
+        throw io::IoError("Failed during read");
       }
     }
     size_t hav = off + rdz;

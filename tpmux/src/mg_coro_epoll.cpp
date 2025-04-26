@@ -1,6 +1,8 @@
+#include <sys/epoll.h>  // struct epoll_event
 #include <coroutine>
 #include <string.h>
 
+#include "mg_io.h"
 #include "mg_fmt_defs.h"
 #include "mg_coro_epoll.h"
 
@@ -45,7 +47,7 @@ int EpollCtl::epoll_upd(int fd, int events, int action, Awaiter * awaiter) {
     ev.data.ptr = &awaiter->m_callback;
   }
   //TRA_PRINT("EpollCtl::epoll_upd({}, {}, {}, {})", fd, events, action, awaiter);
-  if (epoll_ctl(m_epollfd, action, fd, &ev) == -1) {
+  if (::mg7x::io::epoll_ctl(m_epollfd, action, fd, &ev) == -1) {
     ERR_PRINT("EpollCtl::epoll_upd in epoll_ctl: {}", strerror(errno));
     return -1;
   }

@@ -11,6 +11,6 @@ set_target_properties(kdbipc PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/../ipc++/include"
 )
 
-add_executable(tpmux app.cpp mg_coro_kdb_connect.cpp mg_coro_tcp_connect.cpp mg_coro_kdb_read_msg.cpp mg_coro_epoll.cpp mg_coro_kdb_subscribe.cpp)
+add_executable(tpmux mg_coro_app.cpp mg_coro_kdb_connect.cpp mg_coro_tcp_connect.cpp mg_coro_kdb_read_msg.cpp mg_coro_epoll.cpp mg_coro_kdb_subscribe.cpp)
 target_link_libraries(tpmux kdbipc)
 
