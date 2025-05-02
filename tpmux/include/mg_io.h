@@ -17,12 +17,11 @@
 #include <netdb.h> // getaddrinfo_a
 
 #include <stdexcept> // std::logic_error
+#include <format> // std::formatter
 
-namespace mg7x {
+namespace mg7x::io {
 
-namespace io {
-
-class EpollError : public std::logic_error 
+class EpollError : public std::logic_error
 {
 public:
   EpollError(const char *msg)
@@ -30,13 +29,51 @@ public:
   { }
 };
 
-class IoError : public std::logic_error 
+class IoError : public std::logic_error
 {
 public:
   IoError(const char *msg)
    : std::logic_error(msg)
   { }
 };
+
+class TcpConn
+{
+  int m_sock_fd;
+  std::string_view m_host;
+  std::string_view m_service;
+public:
+  TcpConn(int sdf, std::string_view host, std::string_view service)
+   : m_sock_fd(sdf)
+   , m_host(host)
+   , m_service(service)
+   { }
+
+   TcpConn()
+    : TcpConn(-1, "", "")
+   {}
+
+   int sock_fd() const noexcept { return m_sock_fd; }
+
+   std::string_view host() const noexcept { return m_host; }
+
+   std::string_view service() const noexcept { return m_service; }
+};
+
+} // end namespance mg7x::io
+
+template<>
+struct std::formatter<mg7x::io::TcpConn>
+{
+	constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }
+	template<class FormatContext> auto format(const mg7x::io::TcpConn & conn, FormatContext & ctx) const
+	{
+		return std::format_to(ctx.out(), "TcpConn({}:{}, fd={})", conn.host(), conn.service(), conn.sock_fd());
+	}
+};
+
+#ifndef __MG_SUPPRESS_IO_FUNC_DEFS__
+namespace mg7x::io {
 
 inline
 int eventfd(unsigned int initval, int flags)
@@ -92,7 +129,7 @@ int open(const char *pathname, int flags, mode_t mode)
   return ::open(pathname, flags, mode);
 }
 
-inline 
+inline
 int close(int fd)
 {
   return ::close(fd);
@@ -129,7 +166,6 @@ off_t lseek(int fd, off_t offset, int whence)
   return ::lseek(fd, offset, whence);
 }
 
-} // end namespace io
-
-} // end namepace mg7x
+} // end namepace mg7x::io
+#endif
 #endif

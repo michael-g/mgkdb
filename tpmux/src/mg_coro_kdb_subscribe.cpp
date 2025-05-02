@@ -11,6 +11,7 @@
 #include <unordered_set> // std::unordered_set
 #include <algorithm> // std::copy
 
+#include "mg_coro_domain_obj.h"
 #include "mg_fmt_defs.h"
 #include "mg_io.h"
 #include "mg_coro_epoll.h"
@@ -19,9 +20,6 @@
 #include "KdbType.h"
 
 namespace mg7x {
-
-extern
-Task<int> kdb_connect(EpollCtl & epoll, const char * host, const char * service, const char * user);
 
 extern
 Task<mg7x::ReadMsgResult> kdb_read_message(EpollCtl & epoll, int fd, std::vector<int8_t> & ary);
@@ -165,19 +163,12 @@ err_fstat:
   return -1;
 }
 
-Task<int> kdb_subscribe_and_replay(EpollCtl & epoll, const char * service, const char * user, std::vector<std::string_view> & tables, const char *dst_path)
+Task<int> kdb_subscribe_and_replay(EpollCtl & epoll, const io::TcpConn & conn, const Subscription & sub)
 {
-  TRA_PRINT(CYN "kdb_subscribe_and_replay" RST ": calling kdb_connect");
-  int sock_fd = co_await kdb_connect(epoll, "localhost", service, user);
-
-  if (-1 == sock_fd) {
-    ERR_PRINT(YEL "kdb_subscribe_and_replay" RST ": sock_fd is {}", sock_fd);
-    throw io::IoError("Failed in kdb_connect");
-  }
-  DBG_PRINT(CYN "kdb_subscribe_and_replay" RST ": have sock_fd {}", sock_fd);
+  DBG_PRINT(CYN "kdb_subscribe_and_replay" RST ": have sock_fd {}", conn.sock_fd());
 
   mg7x::KdbSymbolAtom fun{".u.sub"};
-  mg7x::KdbSymbolVector tbl{tables};
+  mg7x::KdbSymbolVector tbl{sub.tables()};
   mg7x::KdbSymbolAtom sym{};
   mg7x::KdbList msg{3};
   msg.push(fun);
@@ -196,56 +187,56 @@ Task<int> kdb_subscribe_and_replay(EpollCtl & epoll, const char * service, const
   TRA_PRINT(CYN "kdb_subscribe_and_replay" RST ": serialized subscription message, result is {}", res);
 
   if (mg7x::WriteResult::WR_OK != res) {
-    ERR_PRINT(CYN "kdb_subscribe_and_replay" RST ": failed inexplicably to serialise message; closing FD {}", sock_fd);
-    co_return monitor_close(sock_fd);
+    ERR_PRINT(CYN "kdb_subscribe_and_replay" RST ": failed inexplicably to serialise message; closing FD {}", conn.sock_fd());
+    co_return monitor_close(conn.sock_fd());
   }
 
   ssize_t wrt = 0;
   do {
     // we assume it's writable here, Lord, it's only just been created...
-    ssize_t wrz = ::mg7x::io::write(sock_fd, ary.data() + wrt, ipc_len - wrt);
+    ssize_t wrz = ::mg7x::io::write(conn.sock_fd(), ary.data() + wrt, ipc_len - wrt);
     if (-1 == wrz) {
       // TODO check for EINTR etc
-      ERR_PRINT(CYN "kdb_subscribe_and_replay" RST ": failed in write: {}; closing FD {}", strerror(errno), sock_fd);
-      co_return monitor_close(sock_fd);
+      ERR_PRINT(CYN "kdb_subscribe_and_replay" RST ": failed in write: {}; closing FD {}", strerror(errno), conn.sock_fd());
+      co_return monitor_close(conn.sock_fd());
     }
     wrt += wrz;
-    DBG_PRINT(CYN "kdb_subscribe_and_replay" RST ": Wrote {} bytes of {} to FD {}, awaiting kdb_read_message", wrz, ipc_len, sock_fd);
+    DBG_PRINT(CYN "kdb_subscribe_and_replay" RST ": Wrote {} bytes of {} to FD {}, awaiting kdb_read_message", wrz, ipc_len, conn.sock_fd());
   } while (wrt < ipc_len);
 
 
-  mg7x::ReadMsgResult rmr = co_await kdb_read_message(epoll, sock_fd, ary);
+  mg7x::ReadMsgResult rmr = co_await kdb_read_message(epoll, conn.sock_fd(), ary);
 
   if (mg7x::ReadResult::RD_OK != rmr.result) {
-    ERR_PRINT(CYN "kdb_subscribe_and_replay" RST ": failed to complete read; closing FD {}", sock_fd);
-    co_return monitor_close(sock_fd);
+    ERR_PRINT(CYN "kdb_subscribe_and_replay" RST ": failed to complete read; closing FD {}", conn.sock_fd());
+    co_return monitor_close(conn.sock_fd());
   }
   if (mg7x::KdbMsgType::RESPONSE != rmr.msg_typ) {
-    WRN_PRINT(CYN "kdb_subscribe_and_replay" RST ": unexpected response to .u.sub; closing FD {}", sock_fd);
-    co_return monitor_close(sock_fd);
+    WRN_PRINT(CYN "kdb_subscribe_and_replay" RST ": unexpected response to .u.sub; closing FD {}", conn.sock_fd());
+    co_return monitor_close(conn.sock_fd());
   }
   KdbBase *sub_ptr = rmr.message.get();
 
   if (mg7x::KdbType::LIST != sub_ptr->m_typ) {
-    WRN_PRINT(CYN "kdb_subscribe_and_replay" RST ": expected response of type LIST but received {}; closing FD {}", sub_ptr->m_typ, sock_fd);
-    co_return monitor_close(sock_fd);
+    WRN_PRINT(CYN "kdb_subscribe_and_replay" RST ": expected response of type LIST but received {}; closing FD {}", sub_ptr->m_typ, conn.sock_fd());
+    co_return monitor_close(conn.sock_fd());
   }
   mg7x::KdbList *lst = dynamic_cast<mg7x::KdbList*>(sub_ptr);
   if (mg7x::KdbType::LONG_ATOM != lst->typeAt(0)) {
-    WRN_PRINT(CYN "kdb_subscribe_and_replay" RST ": expected LONG_ATOM at index [0], found {}; closing FD {}", lst->typeAt(0), sock_fd);
-    co_return monitor_close(sock_fd);
+    WRN_PRINT(CYN "kdb_subscribe_and_replay" RST ": expected LONG_ATOM at index [0], found {}; closing FD {}", lst->typeAt(0), conn.sock_fd());
+    co_return monitor_close(conn.sock_fd());
   }
   if (3 != lst->count()) {
-    WRN_PRINT(CYN "kdb_subscribe_and_replay" RST ": expected 3 elements but found {}; closing FD {}", lst->count(), sock_fd);
-    co_return monitor_close(sock_fd);
+    WRN_PRINT(CYN "kdb_subscribe_and_replay" RST ": expected 3 elements but found {}; closing FD {}", lst->count(), conn.sock_fd());
+    co_return monitor_close(conn.sock_fd());
   }
   if (mg7x::KdbType::SYMBOL_ATOM != lst->typeAt(1)) {
-    WRN_PRINT(CYN "kdb_subscribe_and_replay" RST ": expected SYMBOL_ATOM at index [1], found {}; closing FD {}", lst->typeAt(1), sock_fd);
-    co_return monitor_close(sock_fd);
+    WRN_PRINT(CYN "kdb_subscribe_and_replay" RST ": expected SYMBOL_ATOM at index [1], found {}; closing FD {}", lst->typeAt(1), conn.sock_fd());
+    co_return monitor_close(conn.sock_fd());
   }
   if (mg7x::KdbType::LIST != lst->typeAt(2)) {
-    WRN_PRINT(CYN "kdb_subscribe_and_replay" RST ": expected LIST at index [2], found {}; closing FD {}", lst->typeAt(2), sock_fd);
-    co_return monitor_close(sock_fd);
+    WRN_PRINT(CYN "kdb_subscribe_and_replay" RST ": expected LIST at index [2], found {}; closing FD {}", lst->typeAt(2), conn.sock_fd());
+    co_return monitor_close(conn.sock_fd());
   }
 
   const mg7x::KdbLongAtom *msg_count = dynamic_cast<const mg7x::KdbLongAtom*>(lst->getObj(0));
@@ -258,58 +249,51 @@ Task<int> kdb_subscribe_and_replay(EpollCtl & epoll, const char * service, const
     pth_off = path->m_val.find_first_not_of(":");
 
   // unpack the journal location, open, scan for tables, rewrite into ours
-  int jfd = init_jnl(dst_path);
+  int jfd = init_jnl(sub.dst_jnl());
   if (-1 == jfd) {
-    ERR_PRINT("failed to open journal {}; closing FD {}", *path, sock_fd);
-    co_return monitor_close(sock_fd);
+    ERR_PRINT("failed to open journal {}; closing FD {}", *path, conn.sock_fd());
+    co_return monitor_close(conn.sock_fd());
   }
 
-  DBG_PRINT(CYN "kdb_subscribe_and_replay" RST ": co_return {}", sock_fd);
+  DBG_PRINT(CYN "kdb_subscribe_and_replay" RST ": co_return {}", conn.sock_fd());
 
   const std::string_view src_path{path->m_val.c_str() + pth_off};
   int src_fd = ::mg7x::io::open(src_path.data(), O_RDONLY);
   if (-1 == src_fd) {
     ERR_PRINT("failed in open; path was '{}': {}", path->m_val.c_str(), strerror(errno));
-    co_return monitor_close(sock_fd);
+    co_return monitor_close(conn.sock_fd());
   }
   DBG_PRINT("opened src-journal {} as FD {}", src_path, src_fd);
 
-  const std::unordered_set<std::string_view> names{tables.begin(), tables.end()};
+  const std::unordered_set<std::string_view> names{sub.tables().begin(), sub.tables().end()};
   if (msg_count->m_val > 0) {
     int err = filter_msgs(src_fd, static_cast<uint64_t>(msg_count->m_val), jfd, names);
     if (-1 == err) {
-      ERR_PRINT("while filtering journal messages; closing FDs {} and {}", jfd, sock_fd);
+      ERR_PRINT("while filtering journal messages; closing FDs {} and {}", jfd, conn.sock_fd());
       ::mg7x::io::close(jfd);
-      co_return monitor_close(sock_fd);
+      co_return monitor_close(conn.sock_fd());
     }
   }
 
-  co_return sock_fd;
+  co_return conn.sock_fd();
 }
 
-Task<int> kdb_subscribe(EpollCtl & epoll, const char * service, const char * user, std::vector<std::string_view> & tables, const char *dst_path)
+Task<int> kdb_subscribe(EpollCtl & epoll, const io::TcpConn & conn, const Subscription & sub)
 {
-  TRA_PRINT(GRN "kdb_subscribe" RST ": calling kdb_subscribe_and_replay");
-  int sfd = co_await kdb_subscribe_and_replay(epoll, service, user, tables, dst_path);
-
-  if (-1 == sfd) {
-    ERR_PRINT(GRN "kdb_subscribe" RST ": sock_fd is {}", sfd);
-    throw io::IoError("Failed in kdb_subscribe_and_replay");
-  }
-  DBG_PRINT(GRN "kdb_subscribe" RST ": have sock_fd {}", sfd);
+  DBG_PRINT(GRN "kdb_subscribe" RST ": have sock_fd {}", conn.sock_fd());
 
   // We expect each TP message to be smaller than 256 Kb, amend here if you've got unusual requirements
   std::vector<int8_t> ary(256 * 1024);
   ary.resize(0);
 
-  EpollCtl::Awaiter awaiter{sfd};
-  epoll.add_interest(sfd, EPOLLIN, awaiter);
+  EpollCtl::Awaiter awaiter{conn.sock_fd()};
+  epoll.add_interest(conn.sock_fd(), EPOLLIN, awaiter);
   size_t rd_off = 0;
   size_t wr_off = 0;
 
   uint32_t msg_sz = -1;
 
-  const std::unordered_set<std::string_view> tbl_names{tables.begin(), tables.end()};
+  const std::unordered_set<std::string_view> tbl_names{sub.tables().begin(), sub.tables().end()};
   const std::string_view fn_name{"upd"};
 
   do {
@@ -322,10 +306,10 @@ Task<int> kdb_subscribe(EpollCtl & epoll, const char * service, const char * use
       DBG_PRINT(GRN "kdb_subscribe" RST ": epoll revents is not just EPOLLIN: {:#8x}", rev & ~EPOLLIN);
     }
 
-    ssize_t rdz = ::mg7x::io::read(sfd, ary.data() + wr_off, ary.capacity() - wr_off);
+    ssize_t rdz = ::mg7x::io::read(conn.sock_fd(), ary.data() + wr_off, ary.capacity() - wr_off);
     if (-1 == rdz) {
       if (EAGAIN == errno) {
-        TRA_PRINT(GRN "kdb_subscribe" RST ": have EAGAIN on FD {}, nothing further to read", sfd);
+        TRA_PRINT(GRN "kdb_subscribe" RST ": have EAGAIN on FD {}, nothing further to read", conn.sock_fd());
         rdz = 0;
       }
       else {
@@ -333,8 +317,8 @@ Task<int> kdb_subscribe(EpollCtl & epoll, const char * service, const char * use
           continue;
         }
         else {
-          ERR_PRINT(GRN "kdb_subscribe" RST ": while reading from FD {}: {}; closing socket", sfd, strerror(errno));
-          co_return monitor_close(sfd);
+          ERR_PRINT(GRN "kdb_subscribe" RST ": while reading from FD {}: {}; closing socket", conn.sock_fd(), strerror(errno));
+          co_return monitor_close(conn.sock_fd());
         }
       }
     }
@@ -364,7 +348,7 @@ Task<int> kdb_subscribe(EpollCtl & epoll, const char * service, const char * use
     else if (rd_off > wr_off) {
       ERR_PRINT(GRN "kdb_subscribe" RST ": bad maths, crossed cursors: rd_off {}, wr_off {}", rd_off, wr_off);
       // TODO ensure message-count is coherent with published-count
-      co_return monitor_close(sfd);
+      co_return monitor_close(conn.sock_fd());
     }
     else {
       // twiddle this ratio to vary the level at which it will compact
@@ -382,7 +366,7 @@ Task<int> kdb_subscribe(EpollCtl & epoll, const char * service, const char * use
   }
   while (true);
 
-  co_return sfd;
+  co_return conn.sock_fd();
 }
 
 }; // end namespace mg7x

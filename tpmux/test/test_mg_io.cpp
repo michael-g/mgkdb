@@ -1,10 +1,3 @@
-#include <stdexcept>
-#ifdef __mg_io__H__
-#error "Header __mg_io__H__ already defined"
-#endif
-
-// lock-out the inclusion of the mg_io.h header and its inline definitions.
-#define __mg_io__H__
 
 #include <sys/socket.h> // struct sockaddr, socklen_t
 #include <errno.h>
@@ -38,7 +31,7 @@ namespace mg7x::test::io {
   }
 
 namespace eventfd {
-  struct Args 
+  struct Args
   {
     unsigned int initval;
     int flags;
@@ -105,18 +98,6 @@ namespace write {
 } // close namespace mg7x::test::io
 
 namespace mg7x::io {
-
-class EpollError : public std::logic_error
-{
-public:
-  EpollError(const char *msg) : std::logic_error(msg) {}
-};
-
-class SocketError : public std::logic_error
-{
-public:
-  SocketError(const char *msg) : std::logic_error(msg) {}
-};
 
 inline
 int eventfd(unsigned int initval, int flags)

@@ -27,7 +27,7 @@
   cnt:1+rand$[T~`trade;3;9]
  ;tkr:upper cnt?`3
  ;tkr:` sv/:tkr,\:`L
- ;tms:(til cnt)+.z.D + 08:00:00 + I * (6h$19h$16:30 - 08:00) div N
+ ;tms:(til cnt)+.z.D + 08:00:00 + 19h$I * (6h$19h$16:30 - 08:00) div N
  ;lst:$[T~`trade
        ;(tms;tkr;100.0 + cnt?100.0;100 + cnt?100)
        ;T~`quote

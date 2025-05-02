@@ -1,5 +1,4 @@
 
-#include <utility> // std::exchange
 #include <string.h>
 
 #include "mg_io.h"
@@ -7,29 +6,19 @@
 #include "mg_coro_epoll.h"
 #include "mg_fmt_defs.h"
 
+
 namespace mg7x {
 
-extern
-Task<int> tcp_connect(EpollCtl & epoll, const char *host, const char *service);
-
-Task<int> kdb_connect(EpollCtl & epoll, const char * host, const char * service, const char * user)
+Task<int8_t> kdb_connect(EpollCtl & epoll, const io::TcpConn & conn, std::string_view user)
 {
-  TRA_PRINT(YEL "kdb_connect" RST ": calling tcp_connect");
-  int sock_fd = co_await tcp_connect(epoll, host, service);
-
-  if (-1 == sock_fd) {
-    ERR_PRINT(YEL "kdb_connect" RST ": sock_fd is -1");
-    throw io::IoError("Socket not viable");
-  }
-
-  DBG_PRINT(YEL "kdb_connect" RST ": beginning kdb-handshake using sock_fd {}", sock_fd);
+  DBG_PRINT(YEL "kdb_connect" RST ": beginning kdb-handshake using sock_fd {}", conn.sock_fd());
 
   std::array<int8_t,128> creds{};
   size_t off = 0;
-  size_t len = strlen(user);
+  size_t len = user.length();
 
   if (len > 0) {
-    std::copy(user, user + len, &creds[0]);
+    std::copy(user.begin(), user.end(), &creds[0]);
     off = len;
   }
   creds[off++] = ':';
@@ -37,8 +26,8 @@ Task<int> kdb_connect(EpollCtl & epoll, const char * host, const char * service,
   creds[off++] = 0;
 
   {
-    EpollCtl::Awaiter awaiter{sock_fd};
-    int err = epoll.add_interest(sock_fd, EPOLLOUT, awaiter);
+    EpollCtl::Awaiter awaiter{conn.sock_fd()};
+    int err = epoll.add_interest(conn.sock_fd(), EPOLLOUT, awaiter);
     if (-1 == err) {
       ERR_PRINT(YEL "kdb_connect" RST ": failed in .add_interest");
       throw io::EpollError("Failed to .add_interest");
@@ -51,7 +40,7 @@ Task<int> kdb_connect(EpollCtl & epoll, const char * host, const char * service,
   retry:
     DBG_PRINT(YEL "kdb_connect" RST ": writing credentials (attempt {})", retries);
 
-    ssize_t wrt = ::mg7x::io::write(sock_fd, &creds[off], len);
+    ssize_t wrt = ::mg7x::io::write(conn.sock_fd(), &creds[off], len);
     if (-1 == wrt) {
       if (EWOULDBLOCK == errno || EAGAIN == errno) {
         if (retries++ < 3) {
@@ -75,9 +64,9 @@ Task<int> kdb_connect(EpollCtl & epoll, const char * host, const char * service,
   }
 
   {
-    EpollCtl::Awaiter awaiter{sock_fd};
+    EpollCtl::Awaiter awaiter{conn.sock_fd()};
 
-    int err = epoll.mod_interest(sock_fd, EPOLLIN, awaiter);
+    int err = epoll.mod_interest(conn.sock_fd(), EPOLLIN, awaiter);
     if (-1 == err) {
       ERR_PRINT(YEL "kdb_connect" RST ": failed in epoll.mod_interest");
       throw io::EpollError("Failed in .mod_interest");
@@ -91,7 +80,7 @@ Task<int> kdb_connect(EpollCtl & epoll, const char * host, const char * service,
     }
   }
 
-  ssize_t red = ::mg7x::io::read(sock_fd, &creds[0], 1);
+  ssize_t red = ::mg7x::io::read(conn.sock_fd(), &creds[0], 1);
   if (-1 == red) {
     // TOOD this should probably check for EAGAIN, probably not EWOULDBLOCK (given the size);
     ERR_PRINT(YEL "kdb_connect" RST ": while reading login-response: {}", strerror(errno));
@@ -105,14 +94,16 @@ Task<int> kdb_connect(EpollCtl & epoll, const char * host, const char * service,
     throw io::IoError("Failed in kdb IPC-handshake"); // TODO consider error-type
   }
 
-  int err = epoll.clr_interest(sock_fd);
+  int err = epoll.clr_interest(conn.sock_fd());
   if (-1 == err) {
     ERR_PRINT(YEL "kdb_connect" RST ": failed in epoll.clr_interest");
     throw io::EpollError("Failed in .clr_interest");
   }
 
-  TRA_PRINT(YEL "kdb_connect" RST ": co_return sock_fd is {}", sock_fd);
-  co_return sock_fd;
+  int8_t ipc_lvl = creds[0];
+
+  TRA_PRINT(YEL "kdb_connect" RST ": co_return ipc-level {}", ipc_lvl);
+  co_return ipc_lvl;
 
 }
 }

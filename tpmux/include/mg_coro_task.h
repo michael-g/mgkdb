@@ -94,12 +94,12 @@ public:
       TRA_PRINT(MAG "Task" RST "::" YEL "Promise" RST "::get_return_object; from_promise().address {}", hdl.address());
       return Task<T>{hdl};
     }
-    SuspendNever initial_suspend() noexcept {
-      TRA_PRINT(MAG "Task" RST "::" YEL "Promise" RST "::initial_suspend; from_promise().address {}", std::coroutine_handle<Promise>::from_promise(*this).address());
+    SuspendAlways initial_suspend() noexcept {
+      TRA_PRINT(MAG "Task" RST "::" YEL "Promise" RST "::initial_suspend; from_promise().address {}, p_cont.address {}", std::coroutine_handle<Promise>::from_promise(*this).address(), p_cont.address());
       return {};
     }
     void return_value(T && value) {
-      TRA_PRINT(MAG "Task" RST "::" YEL "Promise" RST "::return_value {}, from_promise().address {}", value, std::coroutine_handle<Promise>::from_promise(*this).address());
+      TRA_PRINT(MAG "Task" RST "::" YEL "Promise" RST ":: from_promise().address {}", std::coroutine_handle<Promise>::from_promise(*this).address());
       p_result = std::move(value);
       p_result_type = ResultType::RESULT;
     }
@@ -134,7 +134,7 @@ public:
       switch (p_result_type) {
         case ResultType::RESULT:
           // p_result.~T(); // C.f. the return_value implementation, using placement-new
-          TRA_PRINT(MAG "Task" RST "::" YEL "Promise" RST "::~Promise; result {}, address {}", p_result, std::coroutine_handle<Promise>::from_promise(*this).address());
+          TRA_PRINT(MAG "Task" RST "::" YEL "Promise" RST "::~Promise; address {}", std::coroutine_handle<Promise>::from_promise(*this).address());
           break;
         case ResultType::EXCEPTION:
           TRA_PRINT(MAG "Task" RST "::" YEL "Promise" RST "::~Promise; p_result_type is EXCEPTION, address {}", std::coroutine_handle<Promise>::from_promise(*this).address());
@@ -205,18 +205,18 @@ public:
       TRA_PRINT(YEL MAG "Task" RST "::" CYN "Awaiter" RST "::await_ready" RST "; address {}, returning false", a_handle.address());
       return false;
     }
-    void await_suspend(std::coroutine_handle<> cont) noexcept {
+    std::coroutine_handle<> await_suspend(std::coroutine_handle<> cont) noexcept {
       TRA_PRINT(YEL MAG "Task" RST "::" CYN "Awaiter" RST "::await_suspend:" RST " a_handle? {}, a_handle.done()? {}, a_handle.address {}, cont? {}, cont.done()? {}, cont.address {}",
                            !!a_handle, a_handle && a_handle.done(), a_handle.address(), !!cont, cont && cont.done(), cont.address());
       a_handle.promise().p_cont = cont;
+      return a_handle;
     }
     T await_resume() {
       if (nullptr == a_handle || nullptr == a_handle.promise().p_cont) {
-        WRN_PRINT(MAG "Task" RST "::" CYN "Awaiter" RST "::await_resume" RST "; p_result {}, a_handle? {}, a_handle.done()? {}, a_handle.address {}, p_cont.address() (nil), raising BrokenPromise", a_handle.promise().p_result, !!a_handle, a_handle && a_handle.done(), a_handle.address());
+        WRN_PRINT(MAG "Task" RST "::" CYN "Awaiter" RST "::await_resume" RST "; a_handle? {}, a_handle.done()? {}, a_handle.address {}, p_cont.address() (nil), raising BrokenPromise", !!a_handle, a_handle && a_handle.done(), a_handle.address());
         throw new BrokenPromise();
       }
-      TRA_PRINT(MAG "Task" RST "::" CYN "Awaiter" RST "::await_resume" RST "; p_result {}, a_handle? {}, a_handle.done()? {}, a_handle.address {}, p_cont.address() {}",
-                     a_handle.promise().p_result, !!a_handle, a_handle && a_handle.done(), a_handle.address(), a_handle.promise().p_cont.address());
+      TRA_PRINT(MAG "Task" RST "::" CYN "Awaiter" RST "::await_resume" RST "; a_handle? {}, a_handle.done()? {}, a_handle.address {}, p_cont.address() {}", !!a_handle, a_handle && a_handle.done(), a_handle.address(), a_handle.promise().p_cont.address());
       return std::move(a_handle.promise().p_result);
     }
   private:
@@ -243,6 +243,7 @@ private:
   }
 
 };
+
 
 template<typename T>
 struct TopLevelTask
@@ -279,12 +280,12 @@ struct TopLevelTask
   using promise_type = Policy;
 
   explicit TopLevelTask(std::coroutine_handle<Policy> h) noexcept
-   : m_handle{h}
+    : m_handle{h}
   {
     TRA_PRINT(CYN "TopLevelTask" RST "::" CYN "TopLevelTask" RST "(handle): m_handle.address {}", m_handle.address());
   }
   explicit TopLevelTask(TopLevelTask && rhs) noexcept
-   : m_handle{std::exchange(rhs.m_handle, {})}
+    : m_handle{std::exchange(rhs.m_handle, {})}
   {
     TRA_PRINT(CYN "TopLevelTask" RST "::" CYN "TopLevelTask" RST "(" RED "&&" RST "): m_handle.address {}", m_handle.address());
   }
@@ -305,9 +306,9 @@ struct TopLevelTask
 
   static
   TopLevelTask<T> await(Task<T> & task) noexcept {
-    TRA_PRINT(CYN "TopLevelTask" RST "::await: task.address {}", task.address());
+    TRA_PRINT(CYN "TopLevelTask" RST "::await");
     T result = co_await task;
-    TRA_PRINT(CYN "TopLevelTask" RST "::await: task.address {}, after co_await: result {}", task.address(), result);
+    TRA_PRINT(CYN "TopLevelTask" RST "::await: after co_await: result {}", result);
     co_return result;
   }
 
@@ -339,6 +340,7 @@ public:
 
   bool complete() noexcept
   {
+    TRA_PRINT(YEL "TaskContainer" RST "::complete: ENTER");
     bool all_done = true;
     for (auto it0 = m_tasks.begin() ; it0 != m_tasks.end() ; ) {
       bool done = it0->done();
@@ -351,7 +353,7 @@ public:
         all_done = false;
       }
     }
-
+    TRA_PRINT(YEL "TaskContainer" RST "::complete: EXIT");
     return all_done;
   }
 
