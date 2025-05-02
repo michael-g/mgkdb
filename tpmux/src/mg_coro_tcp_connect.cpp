@@ -7,6 +7,8 @@
 #include <string.h>
 #include <errno.h>
 
+#include <system_error>
+
 #include "mg_fmt_defs.h"
 #include "mg_io.h"
 #include "mg_coro_task.h"
@@ -61,7 +63,8 @@ Task<int> tcp_connect(EpollCtl & epoll, const char *host, const char *service)
   int event_fd = create_event_fd();
   if (true || -1 == event_fd) {
     // already logged
-    throw io::EpollError("Failed to create event_fd");
+    errno = ENOMEM;
+    throw std::system_error(errno, std::system_category(), "Failed to create event_fd");
   }
 
   DBG_PRINT(GRN "tcp_connect" RST ": created event_fd {}", event_fd);

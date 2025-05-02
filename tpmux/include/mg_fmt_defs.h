@@ -1,4 +1,5 @@
-#ifndef __MG_DEFS__
+#ifndef __MG_FMT_DEFS__
+#define __MG_FMT_DEFS__
 #include <source_location>
 #include <print>
 

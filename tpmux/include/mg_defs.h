@@ -1,4 +1,5 @@
 #ifndef __MG_DEFS__
+#define __MG_DEFS__
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)

@@ -12,7 +12,7 @@
 
 namespace mg7x {
 
-extern 
+extern
 Task<int> kdb_subscribe(EpollCtl & epoll, const char * service, const char * user, std::vector<std::string_view> & tables, const char *dst_path);
 
 #define MAX_EVENTS 10
