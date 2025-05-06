@@ -40,35 +40,35 @@ void EpollCtl::Awaiter::onEvent(int events) {
   }
 }
 
-int EpollCtl::epoll_upd(int fd, int events, int action, Awaiter * awaiter) {
+std::expected<int,int> EpollCtl::epoll_upd(int fd, int events, int action, Awaiter * awaiter) {
   struct epoll_event ev;
   ev.events = events;
   if (nullptr != awaiter) {
     ev.data.ptr = &awaiter->m_callback;
   }
-  //TRA_PRINT("EpollCtl::epoll_upd({}, {}, {}, {})", fd, events, action, awaiter);
-  if (::mg7x::io::epoll_ctl(m_epollfd, action, fd, &ev) == -1) {
-    ERR_PRINT("EpollCtl::epoll_upd in epoll_ctl: {}", strerror(errno));
-    return -1;
+  auto ret = ::mg7x::io::epoll_ctl(m_epollfd, action, fd, &ev);
+  if (ret.has_value()) {
+    return ret;
   }
-  return 0;
+  ERR_PRINT("EpollCtl::epoll_upd in epoll_ctl: {}", strerror(errno));
+  return std::unexpected(ret.error());
 }
 
 EpollCtl::EpollCtl(int epoll_fd)
   : m_epollfd{epoll_fd}
 { }
 
-int EpollCtl::mod_interest(int fd, int events, Awaiter & awaiter) {
+std::expected<int,int> EpollCtl::mod_interest(int fd, int events, Awaiter & awaiter) {
   TRA_PRINT("EpollCtl::mod_interest, fd = {}, events = {}", fd, events);
   return epoll_upd(fd, events, EPOLL_CTL_MOD, &awaiter);
 }
 
-int EpollCtl::add_interest(int fd, int events, Awaiter & awaiter) {
+std::expected<int,int> EpollCtl::add_interest(int fd, int events, Awaiter & awaiter) {
   TRA_PRINT("EpollCtl::add_interest, fd = {}, events = {}", fd, events);
   return epoll_upd(fd, events, EPOLL_CTL_ADD, &awaiter);
 }
 
-int EpollCtl::clr_interest(int fd) {
+std::expected<int,int> EpollCtl::clr_interest(int fd) {
   TRA_PRINT("EpollCtl::clr_interest, fd = {}", fd);
   return epoll_upd(fd, 0, EPOLL_CTL_DEL);
 }

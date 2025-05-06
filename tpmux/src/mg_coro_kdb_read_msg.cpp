@@ -1,18 +1,19 @@
+#include "mg_coro_domain_obj.h"
 #include "mg_io.h"
 #include "mg_coro_epoll.h"
 #include "mg_coro_task.h"
 #include "mg_fmt_defs.h"
 #include "KdbType.h"
 
-#include "cppcoro/task.hpp"
+// #include "cppcoro/task.hpp"
 
-#include <utility> // std::exchange
-
+#include <expected>
 
 
 namespace mg7x {
 
-Task<mg7x::ReadMsgResult> kdb_read_message(EpollCtl & epoll, int fd, std::vector<int8_t> & ary)
+Task<std::expected<mg7x::ReadMsgResult,ErrnoMsg>>
+  kdb_read_message(EpollCtl & epoll, int fd, std::vector<int8_t> & ary)
 {
   INF_PRINT(YEL "kdb_read_message" RST ": have sock_fd {}", fd);
   if (ary.capacity() < mg7x::SZ_MSG_HDR) {
@@ -22,27 +23,32 @@ Task<mg7x::ReadMsgResult> kdb_read_message(EpollCtl & epoll, int fd, std::vector
   ary.clear();
 
   EpollCtl::Awaiter awaiter{fd};
-  epoll.add_interest(fd, EPOLLIN, awaiter);
+  std::expected<int,int> result = epoll.add_interest(fd, EPOLLIN, awaiter);
+  if (!result.has_value()) {
+    ERR_PRINT(YEL "kdb_read_message" RST ": failed in EpollCtl::add_interest: {}", strerror(result.error()));
+    co_return std::unexpected(ErrnoMsg{0, "Failed in EpollCtl::add_interest"});
+  }
 
   ssize_t tot = 0;
+  std::expected<ssize_t,int> io_res;
 
   while (tot < mg7x::SZ_MSG_HDR) {
     TRA_PRINT(YEL "kdb_read_message" RST ": awaiting read-signal for header bytes");
     auto [_fd, rev] = co_await awaiter;
     if (rev & EPOLLERR) {
       ERR_PRINT("error signal from epoll: revents is {}; as yet unhandled, exiting", rev);
-      throw io::EpollError("Error reported via revents");
+      co_return std::unexpected(ErrnoMsg{0, "Error reported via revents"});
     }
     TRA_PRINT(YEL "kdb_read_message" RST ": have read-signal");
 
-    ssize_t rdz = ::mg7x::io::read(fd, ary.data(), mg7x::SZ_MSG_HDR);
-    TRA_PRINT(YEL "kdb_read_message" RST ": read {} bytes", rdz);
-    if (-1 == rdz) {
-      ERR_PRINT("failed during read: {}; exiting.", strerror(errno));
+    io_res = ::mg7x::io::read(fd, ary.data(), mg7x::SZ_MSG_HDR);
+    if (!io_res.has_value()) {
+      ERR_PRINT("failed during read: {}; exiting.", strerror(io_res.error()));
       // TODO check EINTR
-      throw io::IoError("Failed in read");
+      co_return std::unexpected(ErrnoMsg{io_res.error(), "Failed during read"});
     }
-    tot += rdz;
+    TRA_PRINT(YEL "kdb_read_message" RST ": read {} bytes", io_res.value());
+    tot += io_res.value();
     TRA_PRINT(YEL "kdb_read_message" RST ": read {} bytes in total", tot);
   }
 
@@ -54,35 +60,48 @@ Task<mg7x::ReadMsgResult> kdb_read_message(EpollCtl & epoll, int fd, std::vector
   size_t off = 0;
   // doesn't matter for v.3 IPC whether it's compressed or not, bytes [4-7] are the wire-size
   int8_t *dst = ary.data();
+  int32_t num_nfrs = 0; // non-fatal retries
   while (!dun) {
     size_t len = std::min(ary.capacity() - off, rdr.getInputBytesRemaining());
     TRA_PRINT(YEL "kdb_read_message" RST ": requesting read of up to {} bytes at offset {}", len, off);
 
-    ssize_t rdz = ::mg7x::io::read(fd, dst + off, len);
-    TRA_PRINT(YEL "kdb_read_message" RST ": read {} bytes", rdz);
+    io_res = ::mg7x::io::read(fd, dst + off, len);
 
-    if (-1 == rdz) {
+    if (!io_res.has_value()) {
       if (EAGAIN == errno) {
         // would have blocked
-        auto [_fd, rev] = co_await awaiter;
-        if (0 != (EPOLLERR & rev)) {
-          throw io::EpollError("Error raised by Epoll");
+        if (num_nfrs++ < 3) {
+          auto [_fd, rev] = co_await awaiter;
+          if (0 != (EPOLLERR & rev)) {
+            ERR_PRINT("Non-zero error-flags reported by epoll: while waiting read signal");
+            co_return std::unexpected(ErrnoMsg{io_res.error(), "EPOLLERR detected"});
+          }
+          continue;
         }
-        continue;
+        ERR_PRINT("Got EAGAIN, non-fatal retry-count exceeded", num_nfrs);
+        co_return std::unexpected(ErrnoMsg{result.error(), "Too many retries"});
       }
       else if (EINTR == errno) {
-        INF_PRINT("placeholder, 'nyi: EINTR on FD {}, exiting", fd);
-        throw io::IoError("Got EINTR during read (TODO:improve)");
+        if (num_nfrs++ < 3) {
+          continue;
+        }
+        ERR_PRINT("Got EINTR, non-fatal retry-count exceeded", num_nfrs);
+        co_return std::unexpected(ErrnoMsg{io_res.error(), "Too many retries"});
       }
       else {
         ERR_PRINT("failed during read: {}; exiting.", strerror(errno));
-        throw io::IoError("Failed during read");
+        co_return std::unexpected(ErrnoMsg{io_res.error(), "Failed during read"});
       }
     }
-    size_t hav = off + rdz;
+
+    num_nfrs = 0;
+    TRA_PRINT(YEL "kdb_read_message" RST ": read {} bytes", io_res.value());
+    size_t hav = off + io_res.value();
     size_t pre = rdr.getInputBytesConsumed();
+
     TRA_PRINT(YEL "kdb_read_message" RST ": offering .readMsg {} bytes", hav);
     dun = rdr.readMsg(dst, hav,  res);
+
     TRA_PRINT(YEL "kdb_read_message" RST ": this read consumed {}, total input bytes used {}, complete? {}", rdr.getInputBytesConsumed() - pre, rdr.getInputBytesConsumed(), dun);
 
     if (!dun) {
@@ -99,9 +118,15 @@ Task<mg7x::ReadMsgResult> kdb_read_message(EpollCtl & epoll, int fd, std::vector
     }
   }
 
-  TRA_PRINT(YEL "kdb_read_message" RST ": message-read complete, have: \n{}", *res.message.get());
+  TRA_PRINT(YEL "kdb_read_message" RST ": message-read complete, have:\n    " CYN "{}\n    " RST, *res.message.get());
 
-  epoll.clr_interest(fd);
+  result = epoll.clr_interest(fd);
+  if (!result.has_value()) {
+    ERR_PRINT(YEL "kdb_read_message" RST ": failed in EpollCtl::clr_interest");
+    co_return std::unexpected(ErrnoMsg{result.error(), "Failed in EpollCtl::clr_interest"});
+  }
+
+  TRA_PRINT(YEL "kdb_read_message" RST ": co_returning {}", res);
 
   co_return std::move(res);
 }

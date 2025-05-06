@@ -1,3 +1,4 @@
+#include <cerrno>
 #include <stdint.h>
 #include <signal.h> // struct sigevent
 #include <sys/eventfd.h> // args to eventfd()
@@ -7,10 +8,10 @@
 #include <string.h>
 #include <errno.h>
 
-// #include <system_error>
 #include <expected>
 #include <utility>
 
+#include "mg_coro_domain_obj.h"
 #include "mg_fmt_defs.h"
 #include "mg_io.h"
 #include "mg_coro_task.h"
@@ -21,9 +22,9 @@ static void mg_sigev_notify(union sigval arg) {
   int64_t val = 1;
   TRA_PRINT(YEL "mg_sigev_notify" RST ": calling ::mg7x::io::write({}, &val, {})", arg.sival_int, sizeof(val));
 
-  int err = ::mg7x::io::write(arg.sival_int, &val, sizeof(val));
-  if (-1 == err) {
-    ERR_PRINT(YEL "mg_sigev_notify" RST ": failed to write 1 byte to m_eventfd {}: {}", arg.sival_int, strerror(errno));
+  std::expected<ssize_t,int> io_res = ::mg7x::io::write(arg.sival_int, &val, sizeof(val));
+  if (!io_res.has_value()) {
+    ERR_PRINT(YEL "mg_sigev_notify" RST ": failed to write 1 byte to m_eventfd {}: {}", arg.sival_int, strerror(io_res.error()));
   }
   else {
     TRA_PRINT(YEL "mg_sigev_notify" RST ": wrote signal value to event-fd in mg_sigev_notify");
@@ -50,31 +51,29 @@ static void mg_print_addrinfo(struct addrinfo *nfo)
   }
 }
 
-static std::pair<int,int> create_event_fd()
+static std::expected<int,int> create_event_fd()
 {
-  int ret = ::mg7x::io::eventfd(0, EFD_NONBLOCK|EFD_SEMAPHORE);
-  if (-1 == ret) {
-    const int err = errno;
-    ERR_PRINT("failed in eventfd: {}", strerror(errno));
-    return {ret, err};
+  std::expected<int,int> result = ::mg7x::io::eventfd(0, EFD_NONBLOCK|EFD_SEMAPHORE);
+  if (!result.has_value()) {
+    ERR_PRINT("failed in eventfd: {}", strerror(result.error()));
   }
-  return {0, ret};
+  return result;
 }
 
 namespace mg7x {
 
-Task<std::expected<io::TcpConn,int>> tcp_connect(EpollCtl & epoll, std::string_view host, std::string_view service)
+Task<std::expected<io::TcpConn,ErrnoMsg>> tcp_connect(EpollCtl & epoll, std::string_view host, std::string_view service)
 // Task<io::TcpConn> tcp_connect(EpollCtl & epoll, std::string_view host, std::string_view service)
 {
   DBG_PRINT(GRN "tcp_connect" RST ": beginning tcp-connection to {}:{}", host, service);
-  auto efd = create_event_fd();
-  if (-1 == efd.first) {
+  std::expected<int,int> result = create_event_fd();
+  if (!result.has_value()) {
     // already logged
-    throw std::system_error(efd.second, std::system_category(), "Failed to create event_fd");
-    // co_return std::unexpected(-1);
+    // throw std::system_error(efd.second, std::system_category(), "Failed to create event_fd");
+    co_return std::unexpected(ErrnoMsg{result.error(), "Failed to create event_fd"});
   }
 
-  const int event_fd = efd.second;
+  const int event_fd = result.value();
 
   DBG_PRINT(GRN "tcp_connect" RST ": created event_fd {}", event_fd);
 
@@ -98,48 +97,66 @@ Task<std::expected<io::TcpConn,int>> tcp_connect(EpollCtl & epoll, std::string_v
 
   {
     EpollCtl::Awaiter awaiter{event_fd};
-    int err = epoll.add_interest(event_fd, EPOLLIN, awaiter);
-    if (-1 == err) {
-      ERR_PRINT(GRN "tcp_connect" RST ": failed in .add_interest, exiting");
-      throw io::IoError("Could not .add_interest");
+    result = epoll.add_interest(event_fd, EPOLLIN, awaiter);
+    if (!result.has_value()) {
+      ERR_PRINT(GRN "tcp_connect" RST ": failed in EpollCtl::add_interest");
+      co_return std::unexpected(ErrnoMsg{result.error(), "Could not .add_interest"});
     }
 
     DBG_PRINT(GRN "tcp_connect" RST ": calling getaddrinfo_a(..)");
 
-    ::mg7x::io::getaddrinfo_a(GAI_NOWAIT, gai_reqs, 1, &sevp);
+    result = ::mg7x::io::getaddrinfo_a(GAI_NOWAIT, gai_reqs, 1, &sevp);
+    if (!result.has_value()) {
+      ERR_PRINT(GRN "tcp_connect" RST ": failed in getaddrinfo_a: {}", strerror(result.error()));
+      co_return std::unexpected(ErrnoMsg{result.error(), "Failed in getaddrinfo_a"});
+    }
 
     DBG_PRINT(GRN "tcp_connect" RST ": co_await EpollCtl::Awaiter{{event_fd = {}}}", event_fd);
     auto [fd, events] = co_await awaiter;
-    // TODO check events for errors
+    if (0 != (events & EPOLLERR)) {
+      ERR_PRINT("Non-zero error-flags reported by epoll: getaddrinfo lookup probably bad");
+      co_return std::unexpected(ErrnoMsg{0, "EPOLLERR detected after getadrrinfo_a op"});
+    }
+
     DBG_PRINT(GRN "tcp_connect" RST ": return from co_await EpollCtl::Awaiter, fd {}, events {}", fd, events);
   }
 
   struct addrinfo *res = gai_req.ar_result;
 
-  epoll.clr_interest(event_fd);
+  result = epoll.clr_interest(event_fd);
+  if (!result.has_value()) {
+    ERR_PRINT(GRN "tcp_connect" RST ": failed in EpollCtl::clr_interest");
+    co_return std::unexpected(ErrnoMsg{result.error(), "Could not .clr_interest"});
+  }
 
   TRA_PRINT(GRN "tcp_connect" RST ": closing event_fd {}", event_fd);
-  if (-1 == close(event_fd)) {
-    ERR_PRINT(GRN "tcp_connect" RST ": failed in close(eventfd): {}", strerror(errno));
+  result = ::mg7x::io::close(event_fd);
+  if (!result.has_value()) {
+    WRN_PRINT(GRN "tcp_connect" RST ": incomplete close(eventfd) signalled: {}", strerror(result.error()));
   }
 
   for ( ; nullptr != res ; res = res->ai_next) {
-    TRA_PRINT(GRN "tcp_connect" RST ": opening socket");
+    TRA_PRINT(GRN "tcp_connect" RST ": opening socket (port {})", service);
     mg_print_addrinfo(res);
-    int sock_fd = ::mg7x::io::socket(res->ai_family, res->ai_socktype | SOCK_NONBLOCK, res->ai_protocol);
-    if (-1 == sock_fd) {
-      WRN_PRINT(GRN "tcp_connect" RST ": failed to create socket({}, {}, {}): {}", res->ai_family, res->ai_socktype, res->ai_protocol, strerror(errno));
+    result = ::mg7x::io::socket(res->ai_family, res->ai_socktype | SOCK_NONBLOCK, res->ai_protocol);
+    if (!result.has_value()) {
+      WRN_PRINT(GRN "tcp_connect" RST ": failed to create socket({}, {}, {}): {}", res->ai_family, res->ai_socktype, res->ai_protocol, strerror(result.error()));
       continue;
     }
-    TRA_PRINT(GRN "tcp_connect" RST ": calling connect");
-    int err = ::mg7x::io::connect(sock_fd, res->ai_addr, res->ai_addrlen);
-    if (-1 == err && EINPROGRESS != errno && EAGAIN != errno) { // EINPROGRESS for SOCK_STREAM, EAGAIN for UNIX domain sockets
-      ERR_PRINT(GRN "tcp_connect" RST ": signalled by 'connect', errno is {}: {}", errno, strerror(errno));
+
+    int sock_fd = result.value();
+    TRA_PRINT(GRN "tcp_connect" RST ": created socket fd {}", sock_fd);
+
+    TRA_PRINT(GRN "tcp_connect" RST ": calling connect; fd {}, port {}", sock_fd, service);
+    result = ::mg7x::io::connect(sock_fd, res->ai_addr, res->ai_addrlen);
+    // EINPROGRESS for SOCK_STREAM, EAGAIN for UNIX domain sockets
+    if (!result.has_value() && EINPROGRESS != result.error() && EAGAIN != result.error()) {
+      ERR_PRINT(GRN "tcp_connect" RST ": signalled by 'connect': {}", strerror(result.error()));
       close(sock_fd);
       continue;
     }
 
-    if (0 == err) { // already connected
+    if (result.has_value() && 0 == result.value()) { // already connected
       INF_PRINT(GRN "tcp_connect" RST ": connected to {}", gai_req.ar_name);
       freeaddrinfo(gai_req.ar_result);
       co_return io::TcpConn{sock_fd, host, service};
@@ -147,32 +164,34 @@ Task<std::expected<io::TcpConn,int>> tcp_connect(EpollCtl & epoll, std::string_v
 
     {
       EpollCtl::Awaiter awaiter{sock_fd};
-      err = epoll.add_interest(sock_fd, EPOLLOUT, awaiter);
-      if (-1 == err) {
-        ERR_PRINT(GRN "tcp_connect" RST ": failed in .add_interest");
-        throw io::EpollError("Could not .add_interest");
+      result = epoll.add_interest(sock_fd, EPOLLOUT, awaiter);
+      if (!result.has_value()) {
+        ERR_PRINT(GRN "tcp_connect" RST ": failed in EpollCtl::add_interest");
+        co_return std::unexpected(ErrnoMsg{result.error(), "Could not EpollCtl::add_interest"});
       }
 
       DBG_PRINT(GRN "tcp_connect" RST ": co_await EpollCtl::Awaiter{{sock_fd = {}}}", sock_fd);
-      auto [fd, events] = co_await awaiter;
-      // TODO check events for errors
-      DBG_PRINT(GRN "tcp_connect" RST ": return from co_await EpollCtl::Awaiter, fd {}, events {}", fd, events);
+      auto [fd, revts] = co_await awaiter;
+      if (0 != (EPOLLERR & revts)) {
+        ERR_PRINT("Non-zero error-flags reported by epoll: probable error during connection");
+        co_return std::unexpected(ErrnoMsg{0, "EPOLLERR detected after connect-op"});
+      }
+      DBG_PRINT(GRN "tcp_connect" RST ": return from co_await EpollCtl::Awaiter, fd {}, events {}", fd, revts);
     }
 
-    err = epoll.clr_interest(sock_fd);
-    if (-1 == err) {
-      ERR_PRINT(GRN "tcp_connect" RST ": failed in .clr_interest");
-      throw io::EpollError("Could not .add_interest");
+    result = epoll.clr_interest(sock_fd);
+    if (!result.has_value()) {
+      ERR_PRINT(GRN "tcp_connect" RST ": failed in EpollCtl::clr_interest");
+      co_return std::unexpected(ErrnoMsg{result.error(), "Could not EpollCtl::add_interest"});
     }
 
     int sk_errno = 0;
     socklen_t sk_optlen = sizeof sk_errno;
 
     TRA_PRINT(GRN "tcp_connect" RST ": calling getsockopt");
-    err = getsockopt(sock_fd, SOL_SOCKET, SO_ERROR, &sk_errno, &sk_optlen);
-
-    if (-1 == err) {
-      ERR_PRINT(GRN "tcp_connect" RST ": in getsockopt: {}", strerror(errno));
+    result = io::getsockopt(sock_fd, SOL_SOCKET, SO_ERROR, &sk_errno, &sk_optlen);
+    if (!result.has_value()) {
+      ERR_PRINT(GRN "tcp_connect" RST ": in getsockopt: {}", strerror(result.error()));
       close(sock_fd);
     }
     else if (0 != sk_errno) {
@@ -186,6 +205,6 @@ Task<std::expected<io::TcpConn,int>> tcp_connect(EpollCtl & epoll, std::string_v
   }
 
   WRN_PRINT(GRN "tcp_connect" RST ": connect failed; " RED "co_return" RST " -1");
-  throw io::IoError{"connect failed"};
+  co_return std::unexpected(ErrnoMsg{0, "Could not establish TCP connection"});
 }
 }; // end namespace mg7x

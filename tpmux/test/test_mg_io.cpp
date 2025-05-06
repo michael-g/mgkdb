@@ -7,6 +7,7 @@
 #include <netdb.h> // getadrinfo_a structs
 #include <sys/epoll.h> // struct epoll_event
 
+#include <expected>
 #include <vector>
 #include <deque>
 
@@ -84,6 +85,19 @@ namespace connect {
   std::deque<struct Outputs<int>> outputs{};
 }
 
+namespace getsockopt {
+  struct Args
+  {
+    int sockfd;
+    int level;
+    int optname;
+    void *optval;
+    socklen_t *optlen;
+  };
+  std::vector<struct Args> calls{};
+  std::deque<struct Outputs<int>> outputs{};
+}
+
 namespace write {
   struct Args
   {
@@ -108,7 +122,7 @@ int eventfd(unsigned int initval, int flags)
 }
 
 inline
-int epoll_ctl(int epfd, int op, int fd, struct epoll_event *events)
+std::expected<int,int> epoll_ctl(int epfd, int op, int fd, struct epoll_event *events)
 {
   using namespace mg7x::test::io::epoll_ctl;
   calls.emplace_back(epfd, op, fd, events);
@@ -116,7 +130,7 @@ int epoll_ctl(int epfd, int op, int fd, struct epoll_event *events)
 }
 
 inline
-int getaddrinfo_a(int mode, struct gaicb** list, int nitems, struct sigevent *sevp)
+std::expected<int,int> getaddrinfo_a(int mode, struct gaicb** list, int nitems, struct sigevent *sevp)
 {
   using namespace mg7x::test::io::getaddrinfo_a;
   calls.emplace_back(mode, list, nitems, sevp);
@@ -124,7 +138,7 @@ int getaddrinfo_a(int mode, struct gaicb** list, int nitems, struct sigevent *se
 }
 
 inline
-int socket(int domain, int type, int protocol)
+std::expected<int,int> socket(int domain, int type, int protocol)
 {
   using namespace mg7x::test::io::socket;
   calls.emplace_back(domain, type, protocol);
@@ -132,11 +146,20 @@ int socket(int domain, int type, int protocol)
 }
 
 inline
-int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+std::expected<int,int> connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
   using namespace mg7x::test::io::connect;
   calls.emplace_back(sockfd, addr, addrlen);
   return pop_set_err_and_return(outputs);
+}
+
+inline
+std::expected<int,int> getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen)
+{
+  using namespace mg7x::test::io::getsockopt;
+  calls.emplace_back(sockfd, level, optname, optval, optlen);
+  return pop_set_err_and_return(outputs);
+
 }
 
 inline

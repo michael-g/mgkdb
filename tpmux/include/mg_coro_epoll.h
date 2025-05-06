@@ -5,6 +5,7 @@
 #include <coroutine>
 #include <utility> // std::pair
 #include <functional> // std::function, std::bind
+#include <expected>
 
 namespace mg7x {
 
@@ -34,18 +35,19 @@ public:
   };
 
 private:
+
   int m_epollfd;
 
-  int epoll_upd(int fd, int events, int action, Awaiter * awaiter = nullptr);
+  std::expected<int,int> epoll_upd(int fd, int events, int action, Awaiter * awaiter = nullptr);
 
 public:
   explicit EpollCtl(int epoll_fd);
 
-  int mod_interest(int fd, int events, Awaiter & awaiter);
+  std::expected<int,int> mod_interest(int fd, int events, Awaiter & awaiter);
 
-  int add_interest(int fd, int events, Awaiter & awaiter);
+  std::expected<int,int> add_interest(int fd, int events, Awaiter & awaiter);
 
-  int clr_interest(int fd);
+  std::expected<int,int> clr_interest(int fd);
 
 };
 

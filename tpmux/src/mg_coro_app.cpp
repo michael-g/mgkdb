@@ -20,18 +20,22 @@
 namespace mg7x {
 
 extern
-Task<std::expected<io::TcpConn,int>> tcp_connect(EpollCtl & epoll, std::string_view host, std::string_view service);
+Task<std::expected<io::TcpConn,int>>
+  tcp_connect(EpollCtl & epoll, std::string_view host, std::string_view service);
 
 extern
-Task<int8_t> kdb_connect(EpollCtl & epoll, const io::TcpConn & conn, std::string_view user);
+Task<std::expected<KdbIpcLevel,ErrnoMsg>>
+  kdb_connect(EpollCtl & epoll, const io::TcpConn & conn, std::string_view user);
 
 extern
-Task<int> kdb_subscribe_and_replay(EpollCtl & epoll, const io::TcpConn & conn, const Subscription & sub);
+Task<std::expected<int,ErrnoMsg>>
+  kdb_subscribe_and_replay(EpollCtl & epoll, const io::TcpConn & conn, const Subscription & sub, TpMsgCounts & counts);
 
 extern
-Task<int> kdb_subscribe(EpollCtl & epoll, const io::TcpConn & conn, const Subscription & sub);
+Task<std::expected<int,ErrnoMsg>>
+  kdb_read_tcp_messages(EpollCtl & epoll, const io::TcpConn & conn, const Subscription & sub, TpMsgCounts & counts);
 
-Task<int> subscribe(EpollCtl & epoll, Subscription sub)
+Task<int> subscribe(EpollCtl & epoll, Subscription sub, TpMsgCounts & counts)
 {
   auto ret = co_await tcp_connect(epoll, "localhost", sub.service());
   if (!ret.has_value()) {
@@ -41,20 +45,20 @@ Task<int> subscribe(EpollCtl & epoll, Subscription sub)
   }
   io::TcpConn conn = ret.value();
 
-  auto ipc_lvl = co_await kdb_connect(epoll, conn, sub.username());
-  if (ipc_lvl < 0) {
+  auto res_kc = co_await kdb_connect(epoll, conn, sub.username());
+  if (!res_kc.has_value()) {
     ERR_PRINT("failed during handshake with KDB");
     co_return -1;
   }
 
-  auto res = co_await kdb_subscribe_and_replay(epoll, conn, sub);
-  if (-1 == res) {
-    co_return res;
+  auto res_ksr = co_await kdb_subscribe_and_replay(epoll, conn, sub, counts);
+  if (!res_ksr.has_value()) {
+    co_return -1;
   }
 
-  res = co_await kdb_subscribe(epoll, conn, sub);
-  if (-1 == res) {
-    co_return res;
+  auto res_rtm = co_await kdb_read_tcp_messages(epoll, conn, sub, counts);
+  if (!res_rtm.has_value()) {
+    co_return -1;
   }
 
   co_return -1;
@@ -78,10 +82,13 @@ int tpmux_main(int argc, char **argv)
 
   TaskContainer<int> tasks{};
 
-  Task<int> task98 = subscribe(ctl, sub98);
+  TpMsgCounts count98{0, 0};
+  // TpMsgCounts count99{0, 0};
+
+  Task<int> task98 = subscribe(ctl, sub98, count98);
   tasks.add(task98);
-  Task<int> task99 = subscribe(ctl, sub99);
-  tasks.add(task99);
+  // Task<int> task99 = subscribe(ctl, sub99, count99);
+  // tasks.add(task99);
 
   // cppcoro::sync_wait(task98);
   struct epoll_event events[MAX_EVENTS];

@@ -17,6 +17,7 @@
 #include <netdb.h> // getaddrinfo_a
 
 #include <stdexcept> // std::logic_error
+#include <expected>
 #include <format> // std::formatter
 
 namespace mg7x::io {
@@ -76,94 +77,163 @@ struct std::formatter<mg7x::io::TcpConn>
 namespace mg7x::io {
 
 inline
-int eventfd(unsigned int initval, int flags)
+std::expected<int,int> eventfd(unsigned int initval, int flags)
 {
-  return ::eventfd(initval, flags);
+  int res = ::eventfd(initval, flags);
+  if (-1 == res) {
+    return std::unexpected(errno);
+  }
+  return res;
 }
 
 inline
-int epoll_ctl(int epfd, int op, int fd, struct epoll_event *events)
+std::expected<int,int> epoll_ctl(int epfd, int op, int fd, struct epoll_event *events)
 {
-  return ::epoll_ctl(epfd, op, fd, events);
+  int ret = ::epoll_ctl(epfd, op, fd, events);
+  if (-1 == ret) {
+    return std::unexpected(errno);
+  }
+  return ret;
 }
 
 inline
-int getaddrinfo_a(int mode, struct gaicb** list, int nitems, struct sigevent *sevp)
+std::expected<int,int> getaddrinfo_a(int mode, struct gaicb** list, int nitems, struct sigevent *sevp)
 {
-  return ::getaddrinfo_a(mode, list, nitems, sevp);
+  int ret = ::getaddrinfo_a(mode, list, nitems, sevp);
+  if (-1 == ret) {
+    return std::unexpected(errno);
+  }
+  return ret;
 }
 
 inline
-int socket(int domain, int type, int protocol)
+std::expected<int,int> socket(int domain, int type, int protocol)
 {
-  return ::socket(domain, type, protocol);
+  int ret = ::socket(domain, type, protocol);
+  if (-1 == ret) {
+    return std::unexpected(errno);
+  }
+  return ret;
 }
 
 inline
-int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+std::expected<int,int> connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
-  return ::connect(sockfd, addr, addrlen);
+  int ret = ::connect(sockfd, addr, addrlen);
+  if (-1 == ret) {
+    return std::unexpected(errno);
+  }
+  return ret;
 }
 
 inline
-ssize_t write(int fd, const void *buf, size_t count)
+std::expected<int,int> getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen)
 {
-  return ::write(fd, buf, count);
+  int ret = ::getsockopt(sockfd, level, optname, optval, optlen);
+  if (-1 == ret) {
+    return std::unexpected(errno);
+  }
+  return ret;
 }
 
 inline
-ssize_t read(int fd, void *buf, size_t count)
+std::expected<ssize_t,int> write(int fd, const void *buf, size_t count)
 {
-  return ::read(fd, buf, count);
+  ssize_t res = ::write(fd, buf, count);
+  if (-1 == res) {
+    return std::unexpected(errno);
+  }
+  return res;
 }
 
 inline
-int open(const char *pathname, int flags)
+std::expected<ssize_t,int> read(int fd, void *buf, size_t count)
 {
-  return ::open(pathname, flags);
+  ssize_t res = ::read(fd, buf, count);
+  if (-1 == res) {
+    return std::unexpected(errno);
+  }
+  return res;
 }
 
 inline
-int open(const char *pathname, int flags, mode_t mode)
+std::expected<int,int> open(const char *pathname, int flags)
 {
-  return ::open(pathname, flags, mode);
+  int res = ::open(pathname, flags);
+  if (-1 == res) {
+    return std::unexpected(errno);
+  }
+  return res;
 }
 
 inline
-int close(int fd)
+std::expected<int,int> open(const char *pathname, int flags, mode_t mode)
 {
-  return ::close(fd);
+  int res = ::open(pathname, flags, mode);
+  if (-1 == res) {
+    return std::unexpected(errno);
+  }
+  return res;
 }
 
 inline
-int fstat(int fd, struct stat *statbuf)
+std::expected<int,int> close(int fd)
 {
-  return ::fstat(fd, statbuf);
+  int res = ::close(fd);
+  if (-1 == res) {
+    return std::unexpected(res);
+  }
+  return res;
 }
 
 inline
-ssize_t sendfile(int out_fd, int in_fd, off_t * offset, size_t count)
+std::expected<int,int> fstat(int fd, struct stat *statbuf)
 {
-  return ::sendfile(out_fd, in_fd, offset, count);
-
+  int res = ::fstat(fd, statbuf);
+  if (-1 == res) {
+    return std::unexpected(res);
+  }
+  return res;
 }
 
 inline
-void* mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
+std::expected<ssize_t,int> sendfile(int out_fd, int in_fd, off_t * offset, size_t count)
 {
-  return ::mmap(addr, length, prot, flags, fd, offset);
+  ssize_t res = ::sendfile(out_fd, in_fd, offset, count);
+  if (-1 == res) {
+    return std::unexpected(errno);
+  }
+  return res;
 }
 
 inline
-int munmap(void *addr, size_t length)
+std::expected<void*,int> mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
-  return ::munmap(addr, length);
+  void *res = ::mmap(addr, length, prot, flags, fd, offset);
+  if (MAP_FAILED == res) {
+    return std::unexpected(errno);
+  }
+  return res;
 }
 
 inline
-off_t lseek(int fd, off_t offset, int whence)
+std::expected<int,int> munmap(void *addr, size_t length)
 {
-  return ::lseek(fd, offset, whence);
+  int res = ::munmap(addr, length);
+  if (-1 == res) {
+    return std::unexpected(errno);
+  }
+  return res;
+}
+
+inline
+std::expected<off_t,int> lseek(int fd, off_t offset, int whence)
+{
+  off_t res = ::lseek(fd, offset, whence);
+  if (-1 == res) {
+    return std::unexpected(errno);
+  }
+  return res;
 }
 
 } // end namepace mg7x::io
