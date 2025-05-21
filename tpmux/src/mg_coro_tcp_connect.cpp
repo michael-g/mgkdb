@@ -62,8 +62,7 @@ static std::expected<int,int> create_event_fd()
 
 namespace mg7x {
 
-Task<std::expected<io::TcpConn,ErrnoMsg>> tcp_connect(EpollCtl & epoll, std::string_view host, std::string_view service)
-// Task<io::TcpConn> tcp_connect(EpollCtl & epoll, std::string_view host, std::string_view service)
+TASK_TYPE<std::expected<io::TcpConn,ErrnoMsg>> tcp_connect(EpollCtl & epoll, std::string_view host, std::string_view service)
 {
   DBG_PRINT(GRN "tcp_connect" RST ": beginning tcp-connection to {}:{}", host, service);
   std::expected<int,int> result = create_event_fd();
@@ -167,13 +166,19 @@ Task<std::expected<io::TcpConn,ErrnoMsg>> tcp_connect(EpollCtl & epoll, std::str
       result = epoll.add_interest(sock_fd, EPOLLOUT, awaiter);
       if (!result.has_value()) {
         ERR_PRINT(GRN "tcp_connect" RST ": failed in EpollCtl::add_interest");
+        close(sock_fd);
         co_return std::unexpected(ErrnoMsg{result.error(), "Could not EpollCtl::add_interest"});
       }
 
       DBG_PRINT(GRN "tcp_connect" RST ": co_await EpollCtl::Awaiter{{sock_fd = {}}}", sock_fd);
       auto [fd, revts] = co_await awaiter;
       if (0 != (EPOLLERR & revts)) {
-        ERR_PRINT("Non-zero error-flags reported by epoll: probable error during connection");
+        ERR_PRINT(GRN "tcp_connect" RST ": non-zero error-flags reported by epoll: probable error during connection; clearing epoll-interest and quitting");
+        result = epoll.clr_interest(sock_fd);
+        if (!result.has_value()) {
+          ERR_PRINT(GRN "tcp_connect" RST ": error reported while clearing epoll-interest");
+        }
+        close(sock_fd);
         co_return std::unexpected(ErrnoMsg{0, "EPOLLERR detected after connect-op"});
       }
       DBG_PRINT(GRN "tcp_connect" RST ": return from co_await EpollCtl::Awaiter, fd {}, events {}", fd, revts);
@@ -182,6 +187,7 @@ Task<std::expected<io::TcpConn,ErrnoMsg>> tcp_connect(EpollCtl & epoll, std::str
     result = epoll.clr_interest(sock_fd);
     if (!result.has_value()) {
       ERR_PRINT(GRN "tcp_connect" RST ": failed in EpollCtl::clr_interest");
+      close(sock_fd);
       co_return std::unexpected(ErrnoMsg{result.error(), "Could not EpollCtl::add_interest"});
     }
 

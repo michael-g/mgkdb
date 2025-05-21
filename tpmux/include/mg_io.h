@@ -16,27 +16,10 @@
 #endif
 #include <netdb.h> // getaddrinfo_a
 
-#include <stdexcept> // std::logic_error
 #include <expected>
 #include <format> // std::formatter
 
 namespace mg7x::io {
-
-class EpollError : public std::logic_error
-{
-public:
-  EpollError(const char *msg)
-   : std::logic_error(msg)
-  { }
-};
-
-class IoError : public std::logic_error
-{
-public:
-  IoError(const char *msg)
-   : std::logic_error(msg)
-  { }
-};
 
 class TcpConn
 {

@@ -12,7 +12,7 @@
 #define _MG_ERROR_ 4
 
 #ifndef _MG_LOG_LVL_
-#define _MG_LOG_LVL_ _MG_TRACE_
+#define _MG_LOG_LVL_ _MG_DEBUG_
 #endif
 
 /* see https://www.linuxjournal.com/article/8603 for other attributes like 'bright', 'dim' */

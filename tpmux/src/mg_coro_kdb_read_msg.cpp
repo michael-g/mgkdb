@@ -12,7 +12,7 @@
 
 namespace mg7x {
 
-Task<std::expected<mg7x::ReadMsgResult,ErrnoMsg>>
+TASK_TYPE<std::expected<mg7x::ReadMsgResult,ErrnoMsg>>
   kdb_read_message(EpollCtl & epoll, int fd, std::vector<int8_t> & ary)
 {
   INF_PRINT(YEL "kdb_read_message" RST ": have sock_fd {}", fd);

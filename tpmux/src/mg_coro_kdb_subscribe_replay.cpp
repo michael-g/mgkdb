@@ -21,7 +21,7 @@
 namespace mg7x {
 
 extern
-Task<std::expected<mg7x::ReadMsgResult,ErrnoMsg>>
+TASK_TYPE<std::expected<mg7x::ReadMsgResult,ErrnoMsg>>
   kdb_read_message(EpollCtl & epoll, int fd, std::vector<int8_t> & ary);
 
 static int monitor_close(int fd)
@@ -39,6 +39,11 @@ static auto bad_structure(int fd)
   return std::unexpected(ErrnoMsg{0, "Bad repsonse struture"});
 }
 
+/**
+  Copies data from `dst_fd` to `src_fd` from position `src_off`, length `len`.
+  The implementation uses `sendfile` to conduct the copy.
+  @return `-1` in the case of error, or `0` if the copy-op succeeded.
+*/
 static int cp_sgmt(const int dst_fd, const int src_fd, const uint64_t src_off, const size_t len)
 {
   off_t l_src_off = static_cast<off_t>(src_off);
@@ -55,7 +60,30 @@ static int cp_sgmt(const int dst_fd, const int src_fd, const uint64_t src_off, c
   return 0;
 }
 
-static int filter_msgs(const int src_fd, const uint64_t msg_count, const int jnl_fd, const std::unordered_set<std::string_view> & tbls, TpMsgCounts & counts)
+/**
+  Scans the tickerplant log file opened as `src_fd` for messages which update the table-names in set `tbls`.
+
+  The function will replay at most `msg_count` messages, since this was the high-water-mark returned by the
+  tickerplant (_i.e._ the value given by `.u.i` in a non-batching TP). Matching messages will be copied into
+  the tickerplant log file opened as `jnl_fd`.
+
+  The `counts` object contains information about messages previously replayed or skipped. These two values
+  will obviously initially be zero. It's easy to see how during a reconnection sequence these values may be
+  greater than zero and identify messages that should not be copied or forwarded to the client again. The
+  values in `counts` will be incremented once the high-water-mark of total-messages-seen has been reached.
+
+  The implementation uses maps the source file into memory for ease of scanning.
+
+  @param src_fd the FD of the source journal
+  @param msg_count the maximum number of known-good messages that can be replayed, typically given by `.u.i`
+  @param jnl_fd the FD of the destination journal
+  @param tbls the set of table names to include into the dest-journal
+  @param counts an object capable of recording the total number of messages seen and forwarded
+
+  @return
+    `-1` in the case of error, or `0` upon success
+*/
+static int filter_jnl(const int src_fd, const uint64_t msg_count, const int jnl_fd, const std::unordered_set<std::string_view> & tbls, TpMsgCounts & counts)
 {
   struct stat sbuf{};
   std::expected<int,int> result = ::mg7x::io::fstat(src_fd, &sbuf);
@@ -75,7 +103,6 @@ static int filter_msgs(const int src_fd, const uint64_t msg_count, const int jnl
 
   // skip the 8-byte header ...
   uint64_t off = mg7x::SZ_JNL_HDR;
-  uint64_t len = 0;
 
 #ifndef _MG_LOG_JNL_TESTS_
 #define JNL_LOG(...)
@@ -83,46 +110,73 @@ static int filter_msgs(const int src_fd, const uint64_t msg_count, const int jnl
 #define JNL_LOG(...) DBG_PRINT(__VA_ARGS__)
 #endif
 
+  DBG_PRINT(CYN "kdb_subscribe_and_replay" RST ": filtering source journal, skipping {} messages", counts.m_num_msg_total);
+
   const std::string_view fn_name{"upd"};
 
+  int err = 0;
+
   for (uint64_t i = 0 ; i < msg_count ; i++) {
-    // TODO implement message-skipping
-    // TODO implement message counting, accumulate into 'counts'
-    JNL_LOG("filter_msg({}, {}, {}, tbls)", ptr + off + len, sbuf.st_size - (off + len), fn_name);
-    int64_t rtn = KdbJournalReader::filter_msg(ptr + off + len, sbuf.st_size - (off + len), fn_name, tbls);
-    if (-2 == rtn) {
-      goto err_jnl_ipc;
-    }
-    if (rtn < 0 || i == msg_count - 1) {
-      if (len > 0) {
-        JNL_LOG("cp_sgmt({}, {}, {}, {})", jnl_fd, src_fd, off, len);
-        int err = cp_sgmt(jnl_fd, src_fd, off, len);
-        if (-1 == err) {
-          goto err_cp;
+    const bool skip = i < counts.m_num_msg_total;
+    int64_t rtn = KdbJournalReader::filter_msg(ptr + off, sbuf.st_size - off, skip, fn_name, tbls);
+    JNL_LOG(CYN "kdb_subscribe_and_replay" RST ": filter_msg({}, {}, {}, {}, tbls) = {}", off, sbuf.st_size - off, skip, fn_name, rtn);
+    if (rtn > 0) {
+      counts.m_num_msg_total += 1;
+      if (!skip) {
+        counts.m_num_msg_included += 1;
+        if (-1 == cp_sgmt(jnl_fd, src_fd, off, rtn)) {
+          err = -1;
+          break;
         }
       }
-      off += len - rtn;
-      len = 0;
+      off += rtn;
+    }
+    else if (rtn < -2) {
+      // message doesn't match (`upd;`table;...) OR does match and should be skipped
+      counts.m_num_msg_total += 1;
+      // adjust by a negative value:
+      off -= rtn;
     }
     else {
-      len += rtn;
+      if (-2 == rtn)
+        ERR_PRINT(CYN "kdb_subscribe_and_replay" RST ": bad IPC");
+      else if (-1 == rtn)
+        ERR_PRINT(CYN "kdb_subscribe_and_replay" RST ": insufficient data (in the journal, shouldn't happen)");
+      else
+        ERR_PRINT(CYN "kdb_subscribe_and_replay" RST ": illegal state, rtn is {}", rtn);
+      err = -1;
+      break;
     }
+
+    // OLD: this used to do message batching, allowing `len` to grow as copyable messages were seen in a
+    // contiguous stream, and which were copied as a block once a non-matching or final message was
+    // encountered.
+    //
+    // if (rtn < 0 || i == msg_count - 1) {
+    //   if (len > 0) {
+    //     JNL_LOG(CYN "kdb_subscribe_and_replay" RST ": cp_sgmt({}, {}, {}, {})", jnl_fd, src_fd, off, len);
+    //     int err = cp_sgmt(jnl_fd, src_fd, off, len);
+    //     if (-1 == err) {
+    //       goto err_cp;
+    //     }
+    //   }
+    //   off += len - rtn;
+    //   len = 0;
+    // }
+    // else {
+    //   len += rtn;
+    // }
   }
 #undef JNL_LOG
 
   result = ::mg7x::io::munmap(addr, sbuf.st_size);
   if (!result.has_value()) {
-    WRN_PRINT("failed in munmap: {}", strerror(result.error()));
+    WRN_PRINT(CYN "kdb_subscribe_and_replay" RST ": failed in munmap: {}", strerror(result.error()));
   }
-  return 0;
 
-err_jnl_ipc:
-err_cp:
-  result = ::mg7x::io::munmap(addr, sbuf.st_size);
-  if (!result.has_value()) {
-    WRN_PRINT("failed in munmap: {}", strerror(result.error()));
-  }
-  return -1;
+  INF_PRINT(CYN "kdb_subscribe_and_replay" RST ": journal replay complete, result {}; total-messages-seen {}, included-message-count {}", err, counts.m_num_msg_total, counts.m_num_msg_included);
+
+  return err;
 }
 
 static std::expected<int,int> init_jnl(const std::string_view & path)
@@ -132,18 +186,18 @@ static std::expected<int,int> init_jnl(const std::string_view & path)
   buf[path.length()] = 0;
   std::expected<int,int> result = ::mg7x::io::open(buf, O_CREAT|O_RDWR, S_IRUSR|S_IWUSR);
   if (!result.has_value()) {
-    ERR_PRINT("failed to open/create file {}: {}", path, strerror(result.error()));
+    ERR_PRINT(CYN "kdb_subscribe_and_replay" RST ": failed to open/create file {}: {}", path, strerror(result.error()));
     return std::unexpected(result.error());
   }
 
   int jfd = result.value();
 
-  DBG_PRINT("opened dest-journal {} as FD {}", path, jfd);
+  DBG_PRINT(CYN "kdb_subscribe_and_replay" RST ": opened dest-journal {} as FD {}", path, jfd);
 
   struct stat sbuf{};
   result = ::mg7x::io::fstat(jfd, &sbuf);
   if (!result.has_value()) {
-    ERR_PRINT("failed in fstat: {}", strerror(result.error()));
+    ERR_PRINT(CYN "kdb_subscribe_and_replay" RST ": failed in fstat: {}", strerror(result.error()));
     goto err_fstat;
   }
 
@@ -155,19 +209,19 @@ static std::expected<int,int> init_jnl(const std::string_view & path)
       int32_t hdr = 0;
     } __attribute__((packed)) header;
 
-    TRA_PRINT("writing dest-journal-header");
+    TRA_PRINT(CYN "kdb_subscribe_and_replay" RST ": writing dest-journal-header");
     std::expected<ssize_t,int> io_res = ::mg7x::io::write(jfd, reinterpret_cast<int8_t*>(&header), sizeof(header));
     if (!io_res.has_value()) {
-      ERR_PRINT("failed to write journal-header: {}", strerror(io_res.error()));
+      ERR_PRINT(CYN "kdb_subscribe_and_replay" RST ": failed to write journal-header: {}", strerror(io_res.error()));
       goto err_write;
     }
-    DBG_PRINT("wrote dest-journal-header: write {}, sizeof(header) {}", io_res.value(), sizeof(header));
+    DBG_PRINT(CYN "kdb_subscribe_and_replay" RST ": wrote dest-journal-header: write {}, sizeof(header) {}", io_res.value(), sizeof(header));
   }
   else {
-    DBG_PRINT("dest-journal size is {}", sbuf.st_size);
+    DBG_PRINT(CYN "kdb_subscribe_and_replay" RST ": dest-journal size is {}", sbuf.st_size);
     result = ::mg7x::io::lseek(jfd, sbuf.st_size, SEEK_SET);
     if (!result.has_value()) {
-      ERR_PRINT("failed in lseek: {}", strerror(result.error()));
+      ERR_PRINT(CYN "kdb_subscribe_and_replay" RST ": failed in lseek: {}", strerror(result.error()));
       goto err_lseek;
     }
   }
@@ -181,7 +235,7 @@ err_fstat:
   return std::unexpected(result.error());
 }
 
-Task<std::expected<int,ErrnoMsg>> kdb_subscribe_and_replay(EpollCtl & epoll, const io::TcpConn & conn, const Subscription & sub, TpMsgCounts & counts)
+TASK_TYPE<std::expected<int,ErrnoMsg>> kdb_subscribe_and_replay(EpollCtl & epoll, const io::TcpConn & conn, const Subscription & sub, TpMsgCounts & counts)
 {
   DBG_PRINT(CYN "kdb_subscribe_and_replay" RST ": have sock_fd {}", conn.sock_fd());
 
@@ -197,7 +251,7 @@ Task<std::expected<int,ErrnoMsg>> kdb_subscribe_and_replay(EpollCtl & epoll, con
   std::vector<int8_t> ary(512); // we assume 512 is greater than ipc_len
   ary.resize(0);
 
-  INF_PRINT(CYN "kdb_subscribe_and_replay" RST ": subscription message is {}", msg);
+  DBG_PRINT(CYN "kdb_subscribe_and_replay" RST ": subscription message is {}", msg);
 
   mg7x::KdbIpcMessageWriter writer{mg7x::KdbMsgType::SYNC, msg};
 
@@ -239,7 +293,7 @@ Task<std::expected<int,ErrnoMsg>> kdb_subscribe_and_replay(EpollCtl & epoll, con
   KdbBase *sub_ptr = rd_msg_res.value().message.get();
 
   if (mg7x::KdbType::LIST != sub_ptr->m_typ) {
-    WRN_PRINT(CYN "kdb_subscribe_and_replay" RST ": expected response of type LIST but received {}; closing FD {}", sub_ptr->m_typ, conn.sock_fd());
+    WRN_PRINT(CYN "kdb_subscribe_and_replay" RST ": expected response of type LIST but received {}: {}; closing FD {}", sub_ptr->m_typ, *sub_ptr, conn.sock_fd());
     co_return bad_structure(conn.sock_fd());
   }
   mg7x::KdbList *lst = dynamic_cast<mg7x::KdbList*>(sub_ptr);
@@ -263,7 +317,13 @@ Task<std::expected<int,ErrnoMsg>> kdb_subscribe_and_replay(EpollCtl & epoll, con
   const mg7x::KdbLongAtom *msg_count = dynamic_cast<const mg7x::KdbLongAtom*>(lst->getObj(0));
   const mg7x::KdbSymbolAtom *path = dynamic_cast<const mg7x::KdbSymbolAtom*>(lst->getObj(1));
 
-  INF_PRINT(CYN "kdb_subscribe_and_replay" RST ": TP message-count is {}, journal is at {}", msg_count->m_val, path->m_val);
+  if (msg_count->m_val < counts.m_num_msg_total) {
+    monitor_close(conn.sock_fd());
+    WRN_PRINT(CYN "kdb_subscribe_and_replay" RST ": reported .u.i message count is {}, alleged message-count previously replayed is {}", msg_count->m_val, counts.m_num_msg_total);
+    co_return std::unexpected(ErrnoMsg{0, "fewer messages in src-journal than we have apparently alread read"});
+  }
+
+  INF_PRINT(CYN "kdb_subscribe_and_replay" RST ": now subscribed; TP message-count is {}, journal is {}, will skip {} messages", msg_count->m_val, path->m_val, counts.m_num_msg_total);
 
   size_t pth_off = 0;
   if (':' == path->m_val.at(0) && path->m_val.length() > 1)
@@ -279,8 +339,6 @@ Task<std::expected<int,ErrnoMsg>> kdb_subscribe_and_replay(EpollCtl & epoll, con
 
   int jfd = result.value();
 
-  DBG_PRINT(CYN "kdb_subscribe_and_replay" RST ": co_return {}", conn.sock_fd());
-
   const std::string_view src_path{path->m_val.c_str() + pth_off};
   result = ::mg7x::io::open(src_path.data(), O_RDONLY);
   if (!result.has_value()) {
@@ -294,7 +352,7 @@ Task<std::expected<int,ErrnoMsg>> kdb_subscribe_and_replay(EpollCtl & epoll, con
 
   const std::unordered_set<std::string_view> names{sub.tables().begin(), sub.tables().end()};
   if (msg_count->m_val > 0) {
-    int err = filter_msgs(src_fd, static_cast<uint64_t>(msg_count->m_val), jfd, names, counts);
+    int err = filter_jnl(src_fd, static_cast<uint64_t>(msg_count->m_val), jfd, names, counts);
     if (-1 == err) {
       ERR_PRINT(CYN "kdb_subscribe_and_replay" RST ": while filtering journal messages; closing FDs {} and {}", jfd, conn.sock_fd());
       result = ::mg7x::io::close(jfd);
@@ -307,103 +365,6 @@ Task<std::expected<int,ErrnoMsg>> kdb_subscribe_and_replay(EpollCtl & epoll, con
   }
 
   co_return 0;
-}
-
-Task<std::expected<int,ErrnoMsg>> kdb_read_tcp_messages(EpollCtl & epoll, const io::TcpConn & conn, const Subscription & sub, TpMsgCounts & counts)
-{
-  DBG_PRINT(GRN "kdb_subscribe" RST ": have sock_fd {}", conn.sock_fd());
-
-  // We expect each TP message to be smaller than 256 Kb, amend here if you've got unusual requirements
-  std::vector<int8_t> ary(256 * 1024);
-  ary.resize(0);
-
-  EpollCtl::Awaiter awaiter{conn.sock_fd()};
-  std::expected<int,int> result = epoll.add_interest(conn.sock_fd(), EPOLLIN, awaiter);
-  if (!result.has_value()) {
-    ERR_PRINT(YEL "kdb_connect" RST ": failed in EpollCtl::add_interest");
-    co_return std::unexpected(ErrnoMsg{result.error(), "Failed in EpollCtl::add_interest"});
-  }
-
-  size_t rd_off = 0;
-  size_t wr_off = 0;
-  uint32_t msg_sz = -1;
-
-  const std::unordered_set<std::string_view> tbl_names{sub.tables().begin(), sub.tables().end()};
-  const std::string_view fn_name{"upd"};
-
-  do {
-    auto [_fd, rev] = co_await awaiter;
-    if (rev & EPOLLERR) {
-      ERR_PRINT(GRN "kdb_subscribe" RST ": error signal from epoll: revents is {:#8x}; 'nyi, exiting", rev);
-      throw io::EpollError("Error indicated by revents");
-    }
-    else if (0 != (rev & ~EPOLLIN)) {
-      DBG_PRINT(GRN "kdb_subscribe" RST ": epoll revents is not just EPOLLIN: {:#8x}", rev & ~EPOLLIN);
-    }
-
-    ssize_t rdz = 0;
-    std::expected<ssize_t,int> io_res = ::mg7x::io::read(conn.sock_fd(), ary.data() + wr_off, ary.capacity() - wr_off);
-    if (!io_res.has_value()) {
-      if (EAGAIN == io_res.error()) {
-        TRA_PRINT(GRN "kdb_subscribe" RST ": have EAGAIN on FD {}, nothing further to read", conn.sock_fd());
-        rdz = 0;
-      }
-      else {
-        if (EINTR == io_res.error()) {
-          // TODO how many times?
-          continue;
-        }
-        else {
-          ERR_PRINT(GRN "kdb_subscribe" RST ": while reading from FD {}: {}; closing socket", conn.sock_fd(), strerror(io_res.error()));
-          co_return monitor_close(conn.sock_fd());
-        }
-      }
-    }
-    wr_off += io_res.value();
-    while (wr_off - rd_off > 0) {
-      int64_t len = KdbJournalReader::filter_msg(ary.data() + rd_off, wr_off - rd_off, fn_name, tbl_names);
-      if (-2 == len) { // insufficent data
-        TRA_PRINT(GRN "kdb_subscribe" RST ": insufficient data remain: rd_off {}, wr_off {}, rem {}", rd_off, wr_off, wr_off - rd_off);
-        break;
-      }
-      else {
-        // TODO increment message count
-        if (len > 0) {
-          TRA_PRINT(GRN "kdb_subscribe" RST ": have matching message: len {}, rd_off {}, wr_off {}, rem {}", len, rd_off, wr_off, wr_off - rd_off);
-          // table match; complete message: copy to output
-        }
-        else {
-          TRA_PRINT(GRN "kdb_subscribe" RST ": skipping non-matching message: len {}, rd_off {}, wr_off {}, rem {}", len, rd_off, wr_off, wr_off - rd_off);
-        }
-        rd_off += std::abs(len);
-      }
-    }
-    if (rd_off == wr_off) {
-      TRA_PRINT(GRN "kdb_subscribe" RST ": buffer empty: resetting rd_off, wr_off");
-      rd_off = wr_off = 0;
-    }
-    else if (rd_off > wr_off) {
-      ERR_PRINT(GRN "kdb_subscribe" RST ": bad maths, crossed cursors: rd_off {}, wr_off {}", rd_off, wr_off);
-      // TODO ensure message-count is coherent with published-count
-      co_return monitor_close(conn.sock_fd());
-    }
-    else {
-      // twiddle this ratio to vary the level at which it will compact
-      // perhaps add other heuristics like amount-to-copy, or min/max/avg-message-size-over-time
-      if ((ary.capacity() - wr_off) < (ary.capacity() / 4)) {
-        TRA_PRINT(GRN "kdb_subscribe" RST ": compacting buffer; rd_off {}, wr_off {}, capacity {}, load {}", rd_off, wr_off, ary.capacity(), ary.capacity() / static_cast<double>(wr_off));
-        std::copy(ary.data() + rd_off, ary.data() + wr_off, ary.data());
-        wr_off -= rd_off;
-        rd_off = 0;
-      }
-      else {
-        TRA_PRINT(GRN "kdb_subscribe" RST ": not compacting buffer: more than 1/4 capacity remaining; rd_off {}, wr_off {}, capacity {}, load {}", rd_off, wr_off, ary.capacity(), ary.capacity() / static_cast<double>(wr_off));
-      }
-    }
-  }
-  while (true);
-
-  co_return conn.sock_fd();
 }
 
 }; // end namespace mg7x

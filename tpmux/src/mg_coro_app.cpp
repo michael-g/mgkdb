@@ -20,26 +20,26 @@
 namespace mg7x {
 
 extern
-Task<std::expected<io::TcpConn,int>>
+TASK_TYPE<std::expected<io::TcpConn,int>>
   tcp_connect(EpollCtl & epoll, std::string_view host, std::string_view service);
 
 extern
-Task<std::expected<KdbIpcLevel,ErrnoMsg>>
+TASK_TYPE<std::expected<KdbIpcLevel,ErrnoMsg>>
   kdb_connect(EpollCtl & epoll, const io::TcpConn & conn, std::string_view user);
 
 extern
-Task<std::expected<int,ErrnoMsg>>
+TASK_TYPE<std::expected<int,ErrnoMsg>>
   kdb_subscribe_and_replay(EpollCtl & epoll, const io::TcpConn & conn, const Subscription & sub, TpMsgCounts & counts);
 
 extern
-Task<std::expected<int,ErrnoMsg>>
+TASK_TYPE<std::expected<int,ErrnoMsg>>
   kdb_read_tcp_messages(EpollCtl & epoll, const io::TcpConn & conn, const Subscription & sub, TpMsgCounts & counts);
 
-Task<int> subscribe(EpollCtl & epoll, Subscription sub, TpMsgCounts & counts)
+TASK_TYPE<int> subscribe(EpollCtl & epoll, Subscription sub, TpMsgCounts & counts)
 {
   auto ret = co_await tcp_connect(epoll, "localhost", sub.service());
   if (!ret.has_value()) {
-    ERR_PRINT("failed to establish TCP connection");
+    ERR_PRINT(YEL "subscribe" RST ": failed to establish TCP connection to port {}", sub.service());
     int err = ret.error();
     co_return err;
   }
@@ -47,17 +47,19 @@ Task<int> subscribe(EpollCtl & epoll, Subscription sub, TpMsgCounts & counts)
 
   auto res_kc = co_await kdb_connect(epoll, conn, sub.username());
   if (!res_kc.has_value()) {
-    ERR_PRINT("failed during handshake with KDB");
+    ERR_PRINT(YEL "subscribe" RST ": failed during handshake with KDB listening on port {}", sub.service());
     co_return -1;
   }
 
   auto res_ksr = co_await kdb_subscribe_and_replay(epoll, conn, sub, counts);
   if (!res_ksr.has_value()) {
+    ERR_PRINT(YEL "subscribe" RST ": failed during subscribe/journal-replay for KDB instance listening on port {}", sub.service());
     co_return -1;
   }
 
   auto res_rtm = co_await kdb_read_tcp_messages(epoll, conn, sub, counts);
   if (!res_rtm.has_value()) {
+    ERR_PRINT(YEL "subscribe" RST ": failed while in steady-state TCP-receive (port {})", sub.service());
     co_return -1;
   }
 
@@ -83,12 +85,12 @@ int tpmux_main(int argc, char **argv)
   TaskContainer<int> tasks{};
 
   TpMsgCounts count98{0, 0};
-  // TpMsgCounts count99{0, 0};
+  TpMsgCounts count99{0, 0};
 
-  Task<int> task98 = subscribe(ctl, sub98, count98);
+  TASK_TYPE<int> task98 = subscribe(ctl, sub98, count98);
   tasks.add(task98);
-  // Task<int> task99 = subscribe(ctl, sub99, count99);
-  // tasks.add(task99);
+  TASK_TYPE<int> task99 = subscribe(ctl, sub99, count99);
+  tasks.add(task99);
 
   // cppcoro::sync_wait(task98);
   struct epoll_event events[MAX_EVENTS];

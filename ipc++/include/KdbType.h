@@ -101,7 +101,7 @@ enum class KdbType
 	MINUTE_VECTOR     = -MINUTE_ATOM,
 	SECOND_VECTOR     = -SECOND_ATOM,
 	TIME_VECTOR       = -TIME_ATOM,
-	TABLE             = 98, 
+	TABLE             = 98,
 	DICT              = 99,
 	FUNCTION          = 100,
 	UNARY_PRIMITIVE   = 101,
@@ -163,7 +163,7 @@ enum class KdbUnary
 	ATAN              = 0x28, // atan
 	ENLIST            = 0x29, // enlist
 	VAR               = 0x2a, // var
-	ELIDED_VALUE      = 0xff, // 
+	ELIDED_VALUE      = 0xff, //
 };
 
 // q)(!/) (4h$key d;value d)@\: where not `~/:value d:k!{@[-9!;0x010000000a00000066,4h$x;`]} each k:til 255
@@ -288,7 +288,7 @@ struct BufIter {
 		m_ptr = rhs.m_ptr;
 		return *this;
 	}
-	
+
 	BufIter & operator=(BufIter && rhs)
 	{
 		std::swap(m_ptr, rhs.m_ptr);
@@ -300,13 +300,13 @@ struct BufIter {
 		m_ptr->push_back(rhs);
 		return *this;
 	}
-	
+
 	BufIter & operator=(char && rhs)
 	{
 		m_ptr->push_back(rhs);
 		return *this;
 	}
-	
+
 	BufIter & operator++() { return *this; }
 	BufIter   operator++(int) { return *this; }
 	BufIter & operator*() { return *this; }
@@ -1111,18 +1111,18 @@ struct KdbTimeVector : public KdbBase
 };
 
 //-------------------------------------------------------------------------------- ColDef/ColRef & related concepts
-template <typename T> 
+template <typename T>
 concept IsKdbType = std::is_base_of<KdbBase, T>::value;
 
 template <typename T>
-concept KdbColCapable = 
-	IsKdbType<T> && 
+concept KdbColCapable =
+	IsKdbType<T> &&
 	static_cast<int>(T::kdb_type) <= static_cast<int>(KdbType::TIME_VECTOR) &&
 	static_cast<int>(T::kdb_type) >= static_cast<int>(KdbType::LIST);
 
 template <typename T>
-concept KdbKeySetCapable = 
-	IsKdbType<T> && 
+concept KdbKeySetCapable =
+	IsKdbType<T> &&
 	(
 		(static_cast<int>(T::kdb_type) <= static_cast<int>(KdbType::TIME_VECTOR)
 		  && static_cast<int>(T::kdb_type) >= static_cast<int>(KdbType::LIST)
@@ -1190,7 +1190,7 @@ KdbTable::KdbTable(const std::vector<std::string_view> & names, T & ... cols)
 	}
 
 	// TODO what if any([0>x for x in typs])
-	
+
 	for (size_t i = 0 ; i < names.size() ; i++) {
 		m_cols->push(names[i]);
 	}
@@ -1221,7 +1221,7 @@ template<KdbColCapable T>
 	void KdbTable::lookupCol(ColRef<T> & def) const
 {
 	int32_t idx = m_cols->indexOf(def.m_name);
-	if (idx < 0) 
+	if (idx < 0)
 		throw std::runtime_error{std::format("No such column '{}'", def.m_name)};
 
 	const KdbBase *base = m_vals->getObj(idx);
@@ -1370,7 +1370,7 @@ class KdbIpcDecompressor
 	uint32_t m_idx{0};   // i
 	uint64_t m_off{0};   // s
 	uint64_t m_rdx{0};   // tracks offset into src message
-	uint64_t m_chx{0};   // p: tracks the trailing cache-pointer 
+	uint64_t m_chx{0};   // p: tracks the trailing cache-pointer
 	uint32_t m_bit{0};   // f
 	uint32_t m_lbh[256]; // aa
 
@@ -1393,7 +1393,7 @@ struct ReadMsgResult
 
 	ReadMsgResult() = default;
 	~ReadMsgResult() = default;
-	
+
 	// ReadMsgResult(ReadMsgResult & rhs) = delete;
 	ReadMsgResult(const ReadMsgResult & rhs) = delete;
 
@@ -1480,7 +1480,7 @@ class KdbJournalReader
 		int64_t msg_len(const int8_t *src, const uint64_t rem);
 
 		static
-		int64_t filter_msg(const int8_t *src, const uint64_t rem, const std::string_view & fn_name, const std::unordered_set<std::string_view> & tbl_names);
+		int64_t filter_msg(const int8_t *src, const uint64_t rem, const bool skip, const std::string_view & fn_name, const std::unordered_set<std::string_view> & tbl_names);
 };
 
 //-------------------------------------------------------------------------------- KdbQuirks
@@ -2142,7 +2142,7 @@ struct std::formatter<mg7x::KdbBoolVector>
 
 		if (1 == vec.count())
 			return std::format_to(out, "(enlist {:d}b)", vec.m_vec[0]);
-		
+
 		for (size_t i = 0 ; i < vec.m_vec.size() ; i++) {
 			std::format_to(out, "{:d}", vec.m_vec[i]);
 		}
@@ -2164,10 +2164,10 @@ struct std::formatter<mg7x::KdbGuidVector>
 		if (1 == vec.count()) {
 			return std::format_to(out, "(enlist \"G\"$\"" _MG_GUID_FMT_STR "\")", _MG_GUID_FMT_ELM(vec.m_vec[0]));
 		}
-		
+
 		std::format_to(out, "(\"G\"$(\"");
 		for (size_t i = 0 ; i < vec.m_vec.size() ; i++) {
-			
+
 			if (i > 0)
 				std::format_to(out, "\";\"");
 			std::format_to(out, _MG_GUID_FMT_STR, _MG_GUID_FMT_ELM(vec.m_vec[i]));
@@ -2189,7 +2189,7 @@ struct std::formatter<mg7x::KdbByteVector>
 
 		if (1 == vec.count())
 			return std::format_to(out, "(enlist {:#02x})", static_cast<uint8_t>(vec.m_vec[0]));
-		
+
 		std::format_to(out, "0x");
 		for (size_t i = 0 ; i < vec.m_vec.size() ; i++) {
 			std::format_to(out, "{:02x}", static_cast<uint8_t>(vec.m_vec[i]));
@@ -2259,10 +2259,10 @@ struct std::formatter<mg7x::KdbCharVector>
 	{
 		if (0 == vec.m_vec.size())
 			return std::format_to(ctx.out(), "(`char$())");
-		
+
 		if (1 == vec.m_vec.size())
 			return std::format_to(ctx.out(), "(enlist\"{}\")", vec.getChar(0));
-		
+
 		std::string_view str = vec.getString();
 		if (std::string::npos == str.find("\""))
 			return std::format_to(ctx.out(), "\"{}\"", str);

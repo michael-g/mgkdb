@@ -11,15 +11,8 @@
 
 #include "mg_fmt_defs.h"
 
-namespace mg7x {
 
-class BrokenPromise : public std::logic_error
-{
-public:
-  BrokenPromise()
-   : std::logic_error("Not yet awaited")
-  { }
-};
+namespace mg7x {
 
 struct SuspendAlways
 {
@@ -52,6 +45,21 @@ struct SuspendNever
     TRA_PRINT(MAG "SuspendNever" RST "::await_resume");
   }
 };
+
+}; // end namespace mg7x
+
+#if 1
+
+namespace mg7x {
+
+class BrokenPromise : public std::logic_error
+{
+public:
+  BrokenPromise()
+   : std::logic_error("Not yet awaited")
+  { }
+};
+
 
 template<typename T>
 class Task
@@ -245,6 +253,20 @@ private:
 };
 
 
+
+}; // end namespace mg7x
+
+#define TASK_TYPE ::mg7x::Task
+
+#else /* begin alternate task-definition */
+
+#include "cppcoro/task.hpp"
+#define TASK_TYPE ::cppcoro::task
+
+#endif /* end alternate task-definition */
+
+namespace mg7x {
+
 template<typename T>
 struct TopLevelTask
 {
@@ -305,7 +327,7 @@ struct TopLevelTask
   }
 
   static
-  TopLevelTask<T> await(Task<T> & task) noexcept {
+  TopLevelTask<T> await(TASK_TYPE<T> & task) noexcept {
     TRA_PRINT(CYN "TopLevelTask" RST "::await");
     T result = co_await task;
     TRA_PRINT(CYN "TopLevelTask" RST "::await: after co_await: result {}", result);
@@ -324,7 +346,8 @@ struct TopLevelTask
   }
 
   std::coroutine_handle<Policy> m_handle;
-};
+}; // end class TopLevelTask
+
 
 template<typename T>
 class TaskContainer
@@ -333,7 +356,7 @@ class TaskContainer
 
 public:
 
-  void add(Task<T> & task) noexcept
+  void add(TASK_TYPE<T> & task) noexcept
   {
     m_tasks.push_back(TopLevelTask<T>::await(task));
   }
@@ -357,8 +380,8 @@ public:
     return all_done;
   }
 
-};
+}; // end class TaskContainer
 
 }; // end namespace mg7x
 
-#endif // __mg_coro_task__H__
+#endif /* end #ifndef __mg_coro_task__H__ */

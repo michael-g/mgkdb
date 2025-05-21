@@ -10,7 +10,7 @@
 
 namespace mg7x {
 
-Task<std::expected<KdbIpcLevel,ErrnoMsg>> kdb_connect(EpollCtl & epoll, const io::TcpConn & conn, std::string_view user)
+TASK_TYPE<std::expected<KdbIpcLevel,ErrnoMsg>> kdb_connect(EpollCtl & epoll, const io::TcpConn & conn, std::string_view user)
 {
   DBG_PRINT(YEL "kdb_connect" RST ": beginning kdb-handshake using sock_fd {}", conn.sock_fd());
 

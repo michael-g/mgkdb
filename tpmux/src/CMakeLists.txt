@@ -18,5 +18,5 @@ set_target_properties(cppcoro PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "/home/michaelg/alt/include"
 )
 
-add_executable(tpmux mg_coro_app.cpp mg_coro_kdb_connect.cpp mg_coro_tcp_connect.cpp mg_coro_kdb_read_msg.cpp mg_coro_epoll.cpp mg_coro_kdb_subscribe.cpp)
+add_executable(tpmux mg_coro_app.cpp mg_coro_kdb_connect.cpp mg_coro_tcp_connect.cpp mg_coro_kdb_read_msg.cpp mg_coro_epoll.cpp mg_coro_kdb_subscribe_replay.cpp mg_coro_kdb_recv_tcp_msgs.cpp)
 target_link_libraries(tpmux kdbipc cppcoro)

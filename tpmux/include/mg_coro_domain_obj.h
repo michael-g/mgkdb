@@ -35,8 +35,8 @@ struct KdbIpcLevel
 
 struct TpMsgCounts
 {
-  uint32_t m_num_msg_kept;
-  uint32_t m_num_msg_skipped;
+  uint32_t m_num_msg_total;
+  uint32_t m_num_msg_included;
 };
 
 class ErrnoMsg
