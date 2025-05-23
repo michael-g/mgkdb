@@ -118,7 +118,7 @@ static int filter_jnl(const int src_fd, const uint64_t msg_count, const int jnl_
 
   for (uint64_t i = 0 ; i < msg_count ; i++) {
     const bool skip = i < counts.m_num_msg_total;
-    int64_t rtn = KdbJournalReader::filter_msg(ptr + off, sbuf.st_size - off, skip, fn_name, tbls);
+    int64_t rtn = KdbJnlMsgFilter::filter_msg(ptr + off, sbuf.st_size - off, skip, fn_name, tbls);
     JNL_LOG(CYN "kdb_subscribe_and_replay" RST ": filter_msg({}, {}, {}, {}, tbls) = {}", off, sbuf.st_size - off, skip, fn_name, rtn);
     if (rtn > 0) {
       counts.m_num_msg_total += 1;

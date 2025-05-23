@@ -81,7 +81,7 @@ TASK_TYPE<std::expected<int,ErrnoMsg>> kdb_read_tcp_messages(EpollCtl & epoll, c
     }
     wr_off += io_res.value();
     while (wr_off - rd_off > 0) {
-      int64_t len = KdbJournalReader::filter_msg(ary.data() + rd_off, wr_off - rd_off, false, fn_name, tbl_names);
+      int64_t len = KdbUpdMsgFilter::filter_msg(ary.data() + rd_off, wr_off - rd_off, fn_name, tbl_names);
       if (len > 0) {
         // worth just pondering here that if the calling function sent us a `counts` object with positive values in
         // each of its message-count fields, that these _must_ exist within the tickerplant log file; therefore we

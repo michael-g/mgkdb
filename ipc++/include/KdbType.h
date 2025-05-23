@@ -1452,11 +1452,9 @@ public:
 
 struct KdbUtil
 {
-	static
-	size_t writeLoginMsg(std::string_view usr, std::string_view pwd, std::unique_ptr<char> & ptr);
-
-	static
-	size_t ipcMessageLen(const KdbBase & payload);
+	static size_t writeLoginMsg(std::string_view usr, std::string_view pwd, std::unique_ptr<char> & ptr);
+	static size_t ipcMessageLen(const KdbBase & payload);
+	static int64_t ipcPayloadLen(const int8_t *src, const uint64_t rem);
 };
 
 class KdbIpcMessageWriter
@@ -1466,20 +1464,22 @@ class KdbIpcMessageWriter
 	const KdbBase          & m_root;
 	size_t                   m_byt_rem;
 
-	public:
-		KdbIpcMessageWriter(KdbMsgType msg_typ, const KdbBase & msg);
+public:
+	KdbIpcMessageWriter(KdbMsgType msg_typ, const KdbBase & msg);
 
-		size_t bytesRemaining() const;
-		WriteResult write(void *dst, size_t cap);
+	size_t bytesRemaining() const;
+	WriteResult write(void *dst, size_t cap);
 };
 
-class KdbJournalReader
+struct KdbUpdMsgFilter
 {
-	public:
-		static
-		int64_t msg_len(const int8_t *src, const uint64_t rem);
+	static
+		int64_t filter_msg(const int8_t *src, const uint64_t rem, const std::string_view & fn_name, const std::unordered_set<std::string_view> & tbl_names);
+};
 
-		static
+struct KdbJnlMsgFilter
+{
+	static
 		int64_t filter_msg(const int8_t *src, const uint64_t rem, const bool skip, const std::string_view & fn_name, const std::unordered_set<std::string_view> & tbl_names);
 };
 
@@ -1847,7 +1847,7 @@ struct std::formatter<Derived, CharT> {
 	// constexpr typename std::basic_format_parse_context<CharT>::iterator parse(std::format_parse_context & ctx) { return ctx.begin(); }
 	constexpr auto parse(std::format_parse_context & ctx) { return ctx.begin(); }
 	// std::basic_format_context<std::__format::_Sink_iter<char>, char>
-  // template<typename O> typename std::basic_format_context<O, CharT>::iterator format(const Derived & obj, std::basic_format_context<O, CharT> & ctx) const
+	// template<typename O> typename std::basic_format_context<O, CharT>::iterator format(const Derived & obj, std::basic_format_context<O, CharT> & ctx) const
 	template <class FormatContext> FormatContext::iterator format(const Derived & obj, FormatContext& ctx) const
 	{
 		switch(obj.m_typ) {
@@ -1896,7 +1896,7 @@ struct std::formatter<Derived, CharT> {
 			case mg7x::KdbType::PROJECTION:            return std::format_to(ctx.out(), "{}", dynamic_cast<const mg7x::KdbProjection&>(obj));
 			default:                                   return std::format_to(ctx.out(), "('`MISSING_CONVERSION)");
 		}
-  }
+	}
 };
 
 template<>

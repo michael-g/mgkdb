@@ -2289,43 +2289,6 @@ size_t KdbUtil::ipcMessageLen(const KdbBase & payload)
 	return SZ_MSG_HDR + payload.wireSz();
 }
 
-//--------------------------------------------------------------------------------------- KdbIpcMessageWriter
-KdbIpcMessageWriter::KdbIpcMessageWriter(KdbMsgType msg_typ, const KdbBase & msg)
- : m_msg_typ(msg_typ)
- , m_ipc_len(KdbUtil::ipcMessageLen(msg))
- , m_root(msg)
-{
-	m_byt_rem = m_ipc_len;
-}
-
-size_t KdbIpcMessageWriter::bytesRemaining() const
-{
-	return m_byt_rem;
-}
-
-WriteResult KdbIpcMessageWriter::write(void *dst, size_t cap)
-{
-	WriteBuf buf{dst, cap, -static_cast<int64_t>(m_ipc_len - m_byt_rem)};
-
-	if (buf.cursorActive()) {
-		if (!buf.canWrite(SZ_MSG_HDR))
-			return WriteResult::WR_INCOMPLETE;
-
-		buf.write<int8_t>(1);                              // little endian
-		buf.write<int8_t>(static_cast<int8_t>(m_msg_typ)); // msg type
-		buf.write<int8_t>(0);                              // ?
-		buf.write<int8_t>(0);                              // ?
-		buf.write<int32_t>(m_ipc_len);
-	}
-	else {
-		buf.ffwd(SZ_MSG_HDR);
-	}
-
-	WriteResult wr = m_root.write(buf);
-	m_byt_rem -= buf.cursorOff();
-	return wr;
-}
-//-------------------------------------------------------------------------------- KdbJournalReader
 struct vec_hdr_s {
 	int8_t typ; int8_t att; int32_t len;
 } __attribute__((packed));
@@ -2340,9 +2303,9 @@ static int64_t msg_len_vary(const int8_t *src, const uint64_t rem)
 		case KdbType::TABLE:
 			return 2 + msg_len_vary(src + 2, rem - 2);
 		case KdbType::DICT:
-			if (0 > (len = KdbJournalReader::msg_len(src + 1, rem - 1)))
+			if (0 > (len = KdbUtil::ipcPayloadLen(src + 1, rem - 1)))
 				return len;
-			if (0 > (tmp = KdbJournalReader::msg_len(src + 1, rem - 1)))
+			if (0 > (tmp = KdbUtil::ipcPayloadLen(src + 1, rem - 1)))
 				return tmp;
 			return SZ_BYTE + len + tmp;
 		default: break;
@@ -2388,7 +2351,7 @@ static int64_t msg_len_list(const int8_t *src, const uint64_t rem)
 	const int32_t cnt = hdr->len;
 	int64_t len  = SZ_VEC_HDR;
 	for (int32_t i = 0 ; i < cnt ; i++) {
-		int64_t eln = KdbJournalReader::msg_len(src + len, rem - len);
+		int64_t eln = KdbUtil::ipcPayloadLen(src + len, rem - len);
 		if (0 > eln) // TODO maybe safter to consider greater-than-or-equals
 			return eln;
 		len += eln;
@@ -2485,7 +2448,7 @@ static int64_t msg_len_atom(const int8_t *src, const uint64_t rem)
   @return `-2` in the case of an unrecognised message element, or
   @return a positive value describing the message length
 */
-int64_t KdbJournalReader::msg_len(const int8_t *src, const uint64_t rem)
+int64_t KdbUtil::ipcPayloadLen(const int8_t *src, const uint64_t rem)
 {
 	if (0 == rem)
 		return -1;
@@ -2511,49 +2474,47 @@ int64_t KdbJournalReader::msg_len(const int8_t *src, const uint64_t rem)
 
 	return msg_len_vary(src, rem);
 }
-
-/**
-  Consider byte sequence beginning at position `src` with `rem` bytes remaining (given by the result
-  of `read`, or a call to `fstat`, in the case of a file).
-
-  The function will test whether the message can be read in its entirety by walking its structure
-  beginning at `src`. If insufficient bytes remain, return `-1`.
-
-  If argument `skip` is true, do not test the filter constraints and simply return the message length.
-
-  If argument `skip` is `false`, look for list-like functions beginning with function name `fn_name`
-  (as a symbol atom), and one of the names in the set `tbl_names` as the second list element.
-  Essentially: check to see if we should include the message.
-
-  While this is primarily intended for filtering tickerplant journals, it works just as well on IPC
-  messages, although you need to strip-off the (v.3 8-byte) IPC header ... assuming it's not compressed.
-  I was once told by a wise old kdb guru that if you subscribe to `localhost` then kdb+ will _not_
-  apply IPC compresssion to the message stream. YMMV, and you should verify this with a packet sniffer.
-
-  @param src a pointer to the first byte in the message to be checked
-  @param rem the remaining number of bytes following `src` which are present in the buffer
-  @param skip whether to skip this message, for example, you know you've already replayed it in an
-    earlier pass
-  @param fn_name the required name of the function, as a symbol atom; only that will do
-  @param tbl_names the set of table names to include
-
-  @return `-1` if insufficient data exists in the byte-sequence to read at least one complete message,
-  @return `-2` if a parse-error occurred,
-  @return a negative value less than `-2` if the message was recognised and parsed correctly, but did
-    not match the filter, and that `abs(return value)` bytes should be skipped, while
-  @return a positive number indicates the message was readable in its entirety and
-    (a) `skip` was set, or
-    (b) the message matches the filter
-*/
-int64_t KdbJournalReader::filter_msg(const int8_t *src, const uint64_t rem, const bool skip,
-                                       const std::string_view & fn_name,
-                                       const std::unordered_set<std::string_view> & tbl_names)
+//--------------------------------------------------------------------------------------- KdbIpcMessageWriter
+KdbIpcMessageWriter::KdbIpcMessageWriter(KdbMsgType msg_typ, const KdbBase & msg)
+ : m_msg_typ(msg_typ)
+ , m_ipc_len(KdbUtil::ipcMessageLen(msg))
+ , m_root(msg)
 {
-	const int64_t len = KdbJournalReader::msg_len(src, rem);
-	if (len < 0 || skip)
-		return len;
+	m_byt_rem = m_ipc_len;
+}
 
-	const struct vec_hdr_s *hdr = reinterpret_cast<const struct vec_hdr_s*>(src);
+size_t KdbIpcMessageWriter::bytesRemaining() const
+{
+	return m_byt_rem;
+}
+
+WriteResult KdbIpcMessageWriter::write(void *dst, size_t cap)
+{
+	WriteBuf buf{dst, cap, -static_cast<int64_t>(m_ipc_len - m_byt_rem)};
+
+	if (buf.cursorActive()) {
+		if (!buf.canWrite(SZ_MSG_HDR))
+			return WriteResult::WR_INCOMPLETE;
+
+		buf.write<int8_t>(1);                              // little endian
+		buf.write<int8_t>(static_cast<int8_t>(m_msg_typ)); // msg type
+		buf.write<int8_t>(0);                              // ?
+		buf.write<int8_t>(0);                              // ?
+		buf.write<int32_t>(m_ipc_len);
+	}
+	else {
+		buf.ffwd(SZ_MSG_HDR);
+	}
+
+	WriteResult wr = m_root.write(buf);
+	m_byt_rem -= buf.cursorOff();
+	return wr;
+}
+
+//-------------------------------------------------------------------------------- KdbTpUtil
+static int64_t _filter_msg(const int8_t *src, const uint64_t len, const std::string_view & fn_name, const std::unordered_set<std::string_view> & tbl_names)
+{
+  const struct vec_hdr_s *hdr = reinterpret_cast<const struct vec_hdr_s*>(src);
 
 	if (KdbType::LIST != static_cast<KdbType>(hdr->typ))
 		return -len;
@@ -2588,6 +2549,88 @@ int64_t KdbJournalReader::filter_msg(const int8_t *src, const uint64_t rem, cons
 		return len;
 	}
 	return -len;
+}
+/**
+  Considers an IPC message (presumably received over the wire) with a standard version 3 header
+  but which _is not_ compressed. We assume that messages between tickerplants and subscribers do
+  not have IPC compression applied. Either way, we can check we've got the entire message from
+  the header and `rem` bytes.
+
+  The function resembles the `KdbJnlMsgFilter::filter_msg` function in its return values.
+
+  @param src a pointer to the first byte in the message to be checked
+  @param rem the remaining number of bytes following `src` which are present in the buffer
+  @param fn_name the required name of the function, as a symbol atom; only that will do
+  @param tbl_names the set of table names to include
+
+  @return `-1` if insufficient data exists in the byte-sequence to read at least one complete message,
+  @return `-2` if a parse-error occurred,
+  @return a negative value less than `-2` if the message was recognised and parsed correctly, but did
+    not match the filter, and that `abs(return value)` bytes should be skipped, while
+  @return a positive number indicates the message was readable in its entirety and the message matches
+    the filter
+*/
+int64_t KdbUpdMsgFilter::filter_msg(const int8_t *src, const uint64_t rem, const std::string_view & fn_name, const std::unordered_set<std::string_view> & tbl_names)
+{
+  if (rem < 8)
+    return -1;
+
+  if (1 != src[0]) // bad endianness, refuse
+    return -2;
+
+  const int32_t *s32 = reinterpret_cast<const int32_t*>(src);
+  int32_t len = s32[1];
+  if (len < 0) // check for bad length value
+    return -2;
+
+  if (rem < static_cast<uint64_t>(len))
+    return -1;
+
+  return _filter_msg(src, static_cast<uint64_t>(len), fn_name, tbl_names);
+}
+
+//-------------------------------------------------------------------------------- KdbJournalReader
+/**
+  Consider byte sequence beginning at position `src` with `rem` bytes remaining (given by the result
+  of `read`, or a call to `fstat`, in the case of a file).
+
+  The function will test whether the message can be read in its entirety by walking its structure
+  beginning at `src`. If insufficient bytes remain, return `-1`.
+
+  If argument `skip` is true, do not test the filter constraints and simply return the message length.
+
+  If argument `skip` is `false`, look for list-like functions beginning with function name `fn_name`
+  (as a symbol atom), and one of the names in the set `tbl_names` as the second list element.
+  Essentially: check to see if we should include the message.
+
+  While this is primarily intended for filtering tickerplant journals, it works just as well on IPC
+  messages, although you need to strip-off the (v.3 8-byte) IPC header ... assuming it's not compressed.
+  I was once told by a wise old kdb guru that if you subscribe to `localhost` then kdb+ will _not_
+  apply IPC compresssion to the message stream. YMMV, and you should verify this with a packet sniffer.
+
+  @param src a pointer to the first byte in the message to be checked
+  @param rem the remaining number of bytes following `src` which are present in the buffer
+  @param skip whether to skip this message, for example, you know you've already replayed it in an
+    earlier pass
+  @param fn_name the required name of the function, as a symbol atom; only that will do
+  @param tbl_names the set of table names to include
+
+  @return `-1` if insufficient data exists in the byte-sequence to read at least one complete message,
+  @return `-2` if a parse-error occurred,
+  @return a negative value less than `-2` if the message was recognised and parsed correctly, but did
+    not match the filter, and that `abs(return value)` bytes should be skipped, while
+  @return a positive number indicates the message was readable in its entirety and
+    (a) `skip` was set, or
+    (b) the message matches the filter
+*/
+int64_t KdbJnlMsgFilter::filter_msg(const int8_t *src, const uint64_t rem, const bool skip,
+                                       const std::string_view & fn_name,
+                                       const std::unordered_set<std::string_view> & tbl_names)
+{
+	const int64_t len = KdbUtil::ipcPayloadLen(src, rem);
+	if (len < 0 || skip)
+		return len;
+	return _filter_msg(src, len, fn_name, tbl_names);
 }
 //-------------------------------------------------------------------------------- end namespace mg7x
 }
