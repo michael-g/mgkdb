@@ -15,6 +15,12 @@ function(add_test_file test_src)
     add_test(NAME ${src_base} COMMAND ${CMAKE_BINARY_DIR}/test/${src_base})
 endfunction()
 
+# How to set RPATH in a library
+# https://stackoverflow.com/a/37684619/322304
+# How to use LD_PRELOAD with CMake
+# https://stackoverflow.com/a/48203323/322304
+# https://stackoverflow.com/a/3411412/322304
+# https://www.quora.com/How-can-I-mock-system-call-error-condition-in-a-C++-unit-test
 add_test_file(KdbTypeTest.cpp)
 add_test_file(ConnectToKdbTest.cpp)
 add_test_file(KdbIpcMessageReaderTest.cpp)
