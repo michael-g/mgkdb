@@ -24,16 +24,22 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 //#endif
 
 #include <string.h>
+#include <stdint.h>
+#include <fcntl.h> // open
+#include <sys/stat.h> // fstat
+#include <unistd.h> // lseek
+#include <errno.h>
+
 #include <algorithm>
 #include <bit>
-#include <cstdint>
 #include <iostream>
 #include <memory>
-#include <cstring>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
+#include <iterator>
 #include <format>
 
 namespace chr = std::chrono;
@@ -2572,7 +2578,7 @@ static int64_t _filter_msg(const int8_t *src, const uint64_t len, const std::str
 */
 int64_t KdbUpdMsgFilter::filter_msg(const int8_t *src, const uint64_t rem, const std::string_view & fn_name, const std::unordered_set<std::string_view> & tbl_names)
 {
-  if (rem < 8)
+  if (rem < SZ_MSG_HDR)
     return -1;
 
   if (1 != src[0]) // bad endianness, refuse
@@ -2583,10 +2589,23 @@ int64_t KdbUpdMsgFilter::filter_msg(const int8_t *src, const uint64_t rem, const
   if (len < 0) // check for bad length value
     return -2;
 
+  // TODO assert this is not a compressed message ... the difference in the header-length at the very
+  // least will mean it doesn't work "by accident"
+
   if (rem < static_cast<uint64_t>(len))
     return -1;
 
-  return _filter_msg(src, static_cast<uint64_t>(len), fn_name, tbl_names);
+  int64_t res = _filter_msg(src + SZ_MSG_HDR, static_cast<uint64_t>(len) - SZ_MSG_HDR, fn_name, tbl_names);
+  // We now have to adjust for the IPC message header we didn't tell the `_filter_msg` function about;
+  // if it returns an error of -1 or -2, we return those unchanged, but any other value is made larger
+  // by SZ_MSG_HDR bytes in the direction of its sign. This allows the calling code to account correctly
+  // for the bytes just consumed.
+  if (res < 0) {
+    if (res >= -2)
+      return res;
+    return res - SZ_MSG_HDR;
+  }
+  return res + SZ_MSG_HDR;
 }
 
 //-------------------------------------------------------------------------------- KdbJournalReader
@@ -2631,6 +2650,82 @@ int64_t KdbJnlMsgFilter::filter_msg(const int8_t *src, const uint64_t rem, const
 	if (len < 0 || skip)
 		return len;
 	return _filter_msg(src, len, fn_name, tbl_names);
+}
+
+//-------------------------------------------------------------------------------- Journal
+KdbJournal::KdbJournal(const std::string_view path)
+ : m_path{path}
+{}
+
+std::expected<int,std::string> KdbJournal::init()
+{
+  std::string dst = m_path + '\0';
+
+  int err = ::open(dst.c_str(), O_CREAT|O_RDWR, S_IRUSR|S_IWUSR);
+  if (-1 == err) {
+    std::string buf{};
+    std::format_to(std::back_inserter(buf), "failed to open file {}: {}", m_path, strerror(errno));
+    return std::unexpected(buf);
+  }
+
+  const int jnl_fd = err;
+
+  struct stat sbuf{};
+  err = ::fstat(jnl_fd, &sbuf);
+
+  std::string err_msg{};
+
+  if (-1 == err) {
+    std::format_to(std::back_inserter(err_msg), "failed in fstat: {}", strerror(errno));
+    goto err_fstat;
+  }
+
+  if (0 == sbuf.st_size) {
+    struct {
+      int8_t one = 0xff;
+      int8_t two = 0x01;
+      int16_t typ = 0;
+      int32_t hdr = 0;
+    } __attribute__((packed)) header;
+
+    // writing dest-journal-header
+    ssize_t wsz = ::write(jnl_fd, reinterpret_cast<int8_t*>(&header), sizeof(header));
+    if (-1 == wsz) {
+      std::format_to(std::back_inserter(err_msg), "failed to write journal-header: {}", strerror(static_cast<int>(wsz)));
+      goto err_write;
+    }
+    // wrote dest-journal-header
+  }
+  else {
+    // dest-journal size is sbuf.st_size
+    off_t lsz = ::lseek(jnl_fd, sbuf.st_size, SEEK_SET);
+    if (-1 == lsz) {
+      std::format_to(std::back_inserter(err_msg), "failed in lseek to end of journal: {}", strerror(errno));
+      goto err_lseek;
+    }
+  }
+
+  m_jnl_fd = jnl_fd;
+
+  return 0;
+
+err_lseek:
+err_write:
+err_fstat:
+  close(jnl_fd);
+  return std::unexpected(err_msg);
+}
+
+std::expected<int,std::string> KdbJournal::close_fd()
+{
+  int err = ::close(m_jnl_fd);
+  m_jnl_fd = -1;
+  if (-1 == err) {
+    std::string buf{};
+    std::format_to(std::back_inserter(buf), "failed while closing FD {}: {}", m_jnl_fd, strerror(errno));
+    return std::unexpected(buf);
+  }
+  return err;
 }
 //-------------------------------------------------------------------------------- end namespace mg7x
 }

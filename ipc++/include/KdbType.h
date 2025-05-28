@@ -27,8 +27,10 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 #include <type_traits>
 #include <cstdint>
 #include <chrono>
-#include <cstring> // memcpy
 #include <unordered_set>
+#include <expected>
+
+#include <cstring> // memcpy
 
 namespace mg7x {
 
@@ -1481,6 +1483,18 @@ struct KdbJnlMsgFilter
 {
 	static
 		int64_t filter_msg(const int8_t *src, const uint64_t rem, const bool skip, const std::string_view & fn_name, const std::unordered_set<std::string_view> & tbl_names);
+};
+
+class KdbJournal
+{
+  std::string m_path;
+  int m_jnl_fd{-1};
+
+public:
+  KdbJournal(const std::string_view path);
+  std::expected<int,std::string> init();
+  int jnl_fd() const noexcept { return m_jnl_fd; }
+  std::expected<int,std::string> close_fd();
 };
 
 //-------------------------------------------------------------------------------- KdbQuirks
