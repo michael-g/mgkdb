@@ -29,6 +29,9 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 #include <chrono>
 #include <unordered_set>
 #include <expected>
+#include <optional>
+#include <filesystem>
+#include <span>
 
 #include <cstring> // memcpy
 
@@ -1456,6 +1459,15 @@ struct KdbUtil
 {
 	static size_t writeLoginMsg(std::string_view usr, std::string_view pwd, std::unique_ptr<char> & ptr);
 	static size_t ipcMessageLen(const KdbBase & payload);
+	/**
+	  Returns the number of bytes in the message pointed to by `src`. Suitable _e.g._ for
+		validating tickerplant journal files (where there's no per-message IPC header).
+    @param src the pointer to the first byte in the sequence
+    @param rem the number of bytes available in the sequence
+    @return `-1` if insufficient bytes remain in the message,
+    @return `-2` in the case of an unrecognised message element, or
+    @return a positive value describing the message length
+  */
 	static int64_t ipcPayloadLen(const int8_t *src, const uint64_t rem);
 };
 
@@ -1473,28 +1485,84 @@ public:
 	WriteResult write(void *dst, size_t cap);
 };
 
+
 struct KdbUpdMsgFilter
 {
-	static
-		int64_t filter_msg(const int8_t *src, const uint64_t rem, const std::string_view & fn_name, const std::unordered_set<std::string_view> & tbl_names);
+  /**
+    Considers an IPC message (presumably received over the wire) with a standard version 3 header
+    but which _is not_ compressed. We assume that messages between tickerplants and subscribers do
+    not have IPC compression applied. Either way, we can check we've got the entire message from
+    the header and `rem` bytes.
+
+    The function resembles the `KdbJnlMsgFilter::filter_msg` function in its return values.
+
+    @param src a pointer to the first byte in the message to be checked
+    @param rem the remaining number of bytes following `src` which are present in the buffer
+    @param fn_name the required name of the function, as a symbol atom; only that will do
+    @param tbl_names the set of table names to include
+
+    @return `-1` if insufficient data exists in the byte-sequence to read at least one complete message,
+    @return `-2` if a parse-error occurred,
+    @return a negative value less than `-2` if the message was recognised and parsed correctly, but did
+      not match the filter, and that `abs(return value)` bytes should be skipped, while
+    @return a positive number indicates the message was readable in its entirety and the message matches
+      the filter
+      */
+  static int64_t filter_msg(const int8_t *src, const uint64_t rem, const std::string_view & fn_name, const std::unordered_set<std::string_view> & tbl_names);
 };
 
-struct KdbJnlMsgFilter
-{
-	static
-		int64_t filter_msg(const int8_t *src, const uint64_t rem, const bool skip, const std::string_view & fn_name, const std::unordered_set<std::string_view> & tbl_names);
-};
 
 class KdbJournal
 {
-  std::string m_path;
-  int m_jnl_fd{-1};
+  std::filesystem::path m_path;
+  bool m_rd_only;
+  int m_jnl_fd;
+  uint64_t m_msg_count;
 
 public:
-  KdbJournal(const std::string_view path);
-  std::expected<int,std::string> init();
+  static std::expected<KdbJournal,std::string> init(std::filesystem::path path, bool read_only);
+    /**
+      Consider byte sequence beginning at position `src` with `rem` bytes remaining (given by the result
+      of `read`, or a call to `fstat`, in the case of a file).
+
+      The function will test whether the message can be read in its entirety by walking its structure
+      beginning at `src`. If insufficient bytes remain, return `-1`.
+
+      If argument `skip` is true, do not test the filter constraints and simply return the message length.
+
+      If argument `skip` is `false`, look for list-like functions beginning with function name `fn_name`
+      (as a symbol atom), and one of the names in the set `tbl_names` as the second list element.
+      Essentially: check to see if we should include the message.
+
+      While this is primarily intended for filtering tickerplant journals, it works just as well on IPC
+      messages, although you need to strip-off the (v.3 8-byte) IPC header ... assuming it's not compressed.
+      I was once told by a wise old kdb guru that if you subscribe to `localhost` then kdb+ will _not_
+      apply IPC compresssion to the message stream. YMMV, and you should verify this with a packet sniffer.
+
+      @param src a pointer to the first byte in the message to be checked
+      @param rem the remaining number of bytes following `src` which are present in the buffer
+      @param skip whether to skip this message, for example, you know you've already replayed it in an
+        earlier pass
+      @param fn_name the required name of the function, as a symbol atom; only that will do
+      @param tbl_names the set of table names to include
+
+      @return `-1` if insufficient data exists in the byte-sequence to read at least one complete message,
+      @return `-2` if a parse-error occurred,
+      @return a negative value less than `-2` if the message was recognised and parsed correctly, but did
+        not match the filter, and that `abs(return value)` bytes should be skipped, while
+      @return a positive number indicates the message was readable in its entirety and
+        (a) `skip` was set, or
+        (b) the message matches the filter
+    */
+  static int64_t filter_msg(const int8_t *src, const uint64_t rem, const bool skip, const std::string_view & fn_name, const std::unordered_set<std::string_view> & tbl_names);
+
+public:
+  KdbJournal(std::filesystem::path path, bool read_only, int jfd, uint64_t msg_count);
+  const std::filesystem::path & path() const noexcept { return m_path; }
   int jnl_fd() const noexcept { return m_jnl_fd; }
-  std::expected<int,std::string> close_fd();
+  uint64_t msg_count() const noexcept { return m_msg_count; }
+  std::optional<std::string> append(std::span<int8_t> data) noexcept;
+  std::optional<std::string> close() noexcept;
 };
 
 //-------------------------------------------------------------------------------- KdbQuirks

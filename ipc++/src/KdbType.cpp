@@ -15,6 +15,8 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 */
 
 #include "KdbType.h"
+#include "KdbIoDefs.h"
+
 #ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200809L // strnlen
 #endif
@@ -2447,13 +2449,6 @@ static int64_t msg_len_atom(const int8_t *src, const uint64_t rem)
 	return -2;
 }
 
-/**
-  @param src the pointer to the first byte in the sequence
-  @param rem the number of bytes available in the sequence
-  @return `-1` if insufficient bytes remain in the message,
-  @return `-2` in the case of an unrecognised message element, or
-  @return a positive value describing the message length
-*/
 int64_t KdbUtil::ipcPayloadLen(const int8_t *src, const uint64_t rem)
 {
 	if (0 == rem)
@@ -2556,26 +2551,7 @@ static int64_t _filter_msg(const int8_t *src, const uint64_t len, const std::str
 	}
 	return -len;
 }
-/**
-  Considers an IPC message (presumably received over the wire) with a standard version 3 header
-  but which _is not_ compressed. We assume that messages between tickerplants and subscribers do
-  not have IPC compression applied. Either way, we can check we've got the entire message from
-  the header and `rem` bytes.
 
-  The function resembles the `KdbJnlMsgFilter::filter_msg` function in its return values.
-
-  @param src a pointer to the first byte in the message to be checked
-  @param rem the remaining number of bytes following `src` which are present in the buffer
-  @param fn_name the required name of the function, as a symbol atom; only that will do
-  @param tbl_names the set of table names to include
-
-  @return `-1` if insufficient data exists in the byte-sequence to read at least one complete message,
-  @return `-2` if a parse-error occurred,
-  @return a negative value less than `-2` if the message was recognised and parsed correctly, but did
-    not match the filter, and that `abs(return value)` bytes should be skipped, while
-  @return a positive number indicates the message was readable in its entirety and the message matches
-    the filter
-*/
 int64_t KdbUpdMsgFilter::filter_msg(const int8_t *src, const uint64_t rem, const std::string_view & fn_name, const std::unordered_set<std::string_view> & tbl_names)
 {
   if (rem < SZ_MSG_HDR)
@@ -2608,41 +2584,16 @@ int64_t KdbUpdMsgFilter::filter_msg(const int8_t *src, const uint64_t rem, const
   return res + SZ_MSG_HDR;
 }
 
-//-------------------------------------------------------------------------------- KdbJournalReader
-/**
-  Consider byte sequence beginning at position `src` with `rem` bytes remaining (given by the result
-  of `read`, or a call to `fstat`, in the case of a file).
+//-------------------------------------------------------------------------------- KdbJournal
+KdbJournal::KdbJournal(std::filesystem::path path, bool read_only, int jfd, uint64_t msg_count)
+ : m_path(path)
+ , m_rd_only(read_only)
+ , m_jnl_fd(jfd)
+ , m_msg_count(msg_count)
+{
+}
 
-  The function will test whether the message can be read in its entirety by walking its structure
-  beginning at `src`. If insufficient bytes remain, return `-1`.
-
-  If argument `skip` is true, do not test the filter constraints and simply return the message length.
-
-  If argument `skip` is `false`, look for list-like functions beginning with function name `fn_name`
-  (as a symbol atom), and one of the names in the set `tbl_names` as the second list element.
-  Essentially: check to see if we should include the message.
-
-  While this is primarily intended for filtering tickerplant journals, it works just as well on IPC
-  messages, although you need to strip-off the (v.3 8-byte) IPC header ... assuming it's not compressed.
-  I was once told by a wise old kdb guru that if you subscribe to `localhost` then kdb+ will _not_
-  apply IPC compresssion to the message stream. YMMV, and you should verify this with a packet sniffer.
-
-  @param src a pointer to the first byte in the message to be checked
-  @param rem the remaining number of bytes following `src` which are present in the buffer
-  @param skip whether to skip this message, for example, you know you've already replayed it in an
-    earlier pass
-  @param fn_name the required name of the function, as a symbol atom; only that will do
-  @param tbl_names the set of table names to include
-
-  @return `-1` if insufficient data exists in the byte-sequence to read at least one complete message,
-  @return `-2` if a parse-error occurred,
-  @return a negative value less than `-2` if the message was recognised and parsed correctly, but did
-    not match the filter, and that `abs(return value)` bytes should be skipped, while
-  @return a positive number indicates the message was readable in its entirety and
-    (a) `skip` was set, or
-    (b) the message matches the filter
-*/
-int64_t KdbJnlMsgFilter::filter_msg(const int8_t *src, const uint64_t rem, const bool skip,
+int64_t KdbJournal::filter_msg(const int8_t *src, const uint64_t rem, const bool skip,
                                        const std::string_view & fn_name,
                                        const std::unordered_set<std::string_view> & tbl_names)
 {
@@ -2652,80 +2603,116 @@ int64_t KdbJnlMsgFilter::filter_msg(const int8_t *src, const uint64_t rem, const
 	return _filter_msg(src, len, fn_name, tbl_names);
 }
 
-//-------------------------------------------------------------------------------- Journal
-KdbJournal::KdbJournal(const std::string_view path)
- : m_path{path}
-{}
-
-std::expected<int,std::string> KdbJournal::init()
+std::expected<KdbJournal,std::string> KdbJournal::init(std::filesystem::path path, bool read_only)
 {
-  std::string dst = m_path + '\0';
+  int flags = read_only ? O_RDONLY : O_CREAT|O_RDWR;
+  int mode = read_only ? 0 : S_IRUSR|S_IWUSR;
+  auto io_res = ::mg7x::io::open(path.c_str(), flags, mode);
 
-  int err = ::open(dst.c_str(), O_CREAT|O_RDWR, S_IRUSR|S_IWUSR);
-  if (-1 == err) {
+  if (!io_res) {
     std::string buf{};
-    std::format_to(std::back_inserter(buf), "failed to open file {}: {}", m_path, strerror(errno));
+    std::format_to(std::back_inserter(buf), "failed to open file {}: {}", path.c_str(), strerror(io_res.error()));
     return std::unexpected(buf);
   }
 
-  const int jnl_fd = err;
+  const int jnl_fd = io_res.value();
 
   struct stat sbuf{};
-  err = ::fstat(jnl_fd, &sbuf);
+  io_res = ::fstat(jnl_fd, &sbuf);
 
   std::string err_msg{};
+  // declare ahead of the goto statements
+  uint64_t msg_count = 0;
+  const int8_t *src = nullptr;
 
-  if (-1 == err) {
-    std::format_to(std::back_inserter(err_msg), "failed in fstat: {}", strerror(errno));
+  if (!io_res) {
+    std::format_to(std::back_inserter(err_msg), "failed in fstat: {}", strerror(io_res.error()));
     goto err_fstat;
   }
 
+  // if it's an empty file, then we initialise with the standard little-endian header. I say "standard",
+  // but I've never seen what a big-endian system writes into a journal header
   if (0 == sbuf.st_size) {
     struct {
       int8_t one = 0xff;
       int8_t two = 0x01;
-      int16_t typ = 0;
-      int32_t hdr = 0;
+      int16_t _pad16 = 0;
+      int32_t _pad32 = 0;
     } __attribute__((packed)) header;
 
     // writing dest-journal-header
-    ssize_t wsz = ::write(jnl_fd, reinterpret_cast<int8_t*>(&header), sizeof(header));
-    if (-1 == wsz) {
-      std::format_to(std::back_inserter(err_msg), "failed to write journal-header: {}", strerror(static_cast<int>(wsz)));
+    std::expected<ssize_t,int> wr_res = ::mg7x::io::write(jnl_fd, reinterpret_cast<int8_t*>(&header), sizeof(header));
+    if (!wr_res) {
+      std::format_to(std::back_inserter(err_msg), "failed to write journal-header: {}", strerror(static_cast<int>(wr_res.error())));
       goto err_write;
     }
-    // wrote dest-journal-header
   }
   else {
-    // dest-journal size is sbuf.st_size
-    off_t lsz = ::lseek(jnl_fd, sbuf.st_size, SEEK_SET);
-    if (-1 == lsz) {
-      std::format_to(std::back_inserter(err_msg), "failed in lseek to end of journal: {}", strerror(errno));
+    std::expected<off_t,int> ls_res;
+    std::expected<uint64_t,std::string> len_res;
+    // (ab)use SZ_MSG_HDR here which also happens to be the size of the journal's header
+    std::expected<void*,int> map_res = ::mg7x::io::mmap(nullptr, sbuf.st_size, PROT_READ, MAP_PRIVATE|MAP_POPULATE, jnl_fd, 0);
+    if (!map_res) {
+      std::format_to(std::back_inserter(err_msg), "failed while mmap'ing journal: {}", strerror(map_res.error()));
+      goto err_mmap;
+    }
+
+    src = reinterpret_cast<int8_t*>(map_res.value());
+    // struct stat .st_size has signed-type off_t
+    const uint64_t jnl_usz = static_cast<uint64_t>(sbuf.st_size);
+    uint64_t off = SZ_MSG_HDR;
+
+    while (off < jnl_usz) {
+      int64_t ipc_len = KdbUtil::ipcPayloadLen(src + off, jnl_usz - off);
+      if (ipc_len < 0) {
+        if (-1 == ipc_len) {
+          std::format_to(std::back_inserter(err_msg), "incomplete journal at offset {}", off);
+        }
+        else {
+          std::format_to(std::back_inserter(err_msg), "bad journal record at offset {}", off);
+        }
+        goto err_msg_len;
+      }
+      off += static_cast<uint64_t>(ipc_len);
+      msg_count += 1;
+    }
+
+    (void)::mg7x::io::munmap(static_cast<void*>(const_cast<int8_t*>(src)), sbuf.st_size);
+
+    ls_res = ::mg7x::io::lseek(jnl_fd, sbuf.st_size, SEEK_SET);
+    if (!ls_res) {
+      std::format_to(std::back_inserter(err_msg), "failed in lseek to end of journal: {}", strerror(ls_res.error()));
       goto err_lseek;
     }
   }
 
-  m_jnl_fd = jnl_fd;
-
-  return 0;
+  return KdbJournal{path, read_only, jnl_fd, msg_count};
 
 err_lseek:
+err_msg_len:
+  (void)::mg7x::io::munmap(static_cast<void*>(const_cast<int8_t*>(src)), sbuf.st_size);
+err_mmap:
 err_write:
 err_fstat:
-  close(jnl_fd);
+  (void)::mg7x::io::close(jnl_fd);
   return std::unexpected(err_msg);
 }
 
-std::expected<int,std::string> KdbJournal::close_fd()
+std::optional<std::string> KdbJournal::append(std::span<int8_t> data) noexcept
 {
-  int err = ::close(m_jnl_fd);
+  return {};
+}
+
+std::optional<std::string> KdbJournal::close() noexcept
+{
+  std::expected<int,int> res = ::mg7x::io::close(m_jnl_fd);
   m_jnl_fd = -1;
-  if (-1 == err) {
+  if (!res) {
     std::string buf{};
-    std::format_to(std::back_inserter(buf), "failed while closing FD {}: {}", m_jnl_fd, strerror(errno));
-    return std::unexpected(buf);
+    std::format_to(std::back_inserter(buf), "failed while closing FD {}: {}", m_jnl_fd, strerror(res.error()));
+    return buf;
   }
-  return err;
+  return {};
 }
 //-------------------------------------------------------------------------------- end namespace mg7x
 }
