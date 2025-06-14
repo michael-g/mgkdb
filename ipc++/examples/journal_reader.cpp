@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
 	// replay the journal, but for "exposition purposes", we will do just that. Here we create
 	// a function that will receive a pointer and length value for all messages that match
 	// the filter we'll define below:
-  auto scribe = [](const int8_t *src, uint64_t len) -> int {
+	auto scribe = [](const int8_t *src, uint64_t len) -> int {
 		// return 1 to indicate the message was used, 0 if it was skipped or -1 if an error condition
 		// arose and we need the filtering to exit
 		ReadBuf buf{src, len};
@@ -77,12 +77,12 @@ int main(int argc, char *argv[])
 
 		delete base;
 
-    return 1;
-  };
+		return 1;
+	};
 
 	std::string_view fn_name{"upd"};
 	// Let's skip the quotes, we only want trades:
-  const std::unordered_set<std::string_view> names{"trade"};
+	const std::unordered_set<std::string_view> names{"trade"};
 	// Here we use the helper-function `mk_upd_tbl_filter` to match:
 	// a) list-like functions with three parameters
 	// b) for the `upd function 
