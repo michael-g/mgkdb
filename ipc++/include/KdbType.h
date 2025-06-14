@@ -1461,14 +1461,15 @@ struct KdbUtil
 	static size_t ipcMessageLen(const KdbBase & payload);
 	/**
 	  Returns the number of bytes in the message pointed to by `src`. Suitable _e.g._ for
-		validating tickerplant journal files (where there's no per-message IPC header).
-    @param src the pointer to the first byte in the sequence
-    @param rem the number of bytes available in the sequence
-    @return `-1` if insufficient bytes remain in the message,
-    @return `-2` in the case of an unrecognised message element, or
-    @return a positive value describing the message length
-  */
+	  validating tickerplant journal files (where there's no per-message IPC header).
+	  @param src the pointer to the first byte in the sequence
+	  @param rem the number of bytes available in the sequence
+	  @return `-1` if insufficient bytes remain in the message,
+	  @return `-2` in the case of an unrecognised message element, or
+	  @return a positive value describing the message length
+	*/
 	static int64_t ipcPayloadLen(const int8_t *src, const uint64_t rem);
+	static ReadResult newInstanceFromIpc(ReadBuf & buf, KdbBase **ptr);
 };
 
 class KdbIpcMessageWriter
@@ -1488,77 +1489,76 @@ public:
 
 struct KdbUpdMsgFilter
 {
-  /**
-    Considers an IPC message (presumably received over the wire) with a standard version 3 header
-    but which _is not_ compressed. We assume that messages between tickerplants and subscribers do
-    not have IPC compression applied. Either way, we can check we've got the entire message from
-    the header and `rem` bytes.
+	/**
+	  Considers an IPC message (presumably received over the wire) with a standard version 3 header
+	  but which _is not_ compressed. We assume that messages between tickerplants and subscribers do
+	  not have IPC compression applied. Either way, we can check we've got the entire message from
+	  the header and `rem` bytes.
 
-    The function resembles the `KdbJnlMsgFilter::filter_msg` function in its return values.
+	  The function resembles the `KdbJnlMsgFilter::filter_msg` function in its return values.
 
-    @param src a pointer to the first byte in the message to be checked
-    @param rem the remaining number of bytes following `src` which are present in the buffer
-    @param fn_name the required name of the function, as a symbol atom; only that will do
-    @param tbl_names the set of table names to include
+	  @param src a pointer to the first byte in the message to be checked
+	  @param rem the remaining number of bytes following `src` which are present in the buffer
+	  @param fn_name the required name of the function, as a symbol atom; only that will do
+	  @param tbl_names the set of table names to include
 
-    @return `-1` if insufficient data exists in the byte-sequence to read at least one complete message,
-    @return `-2` if a parse-error occurred,
-    @return a negative value less than `-2` if the message was recognised and parsed correctly, but did
-      not match the filter, and that `abs(return value)` bytes should be skipped, while
-    @return a positive number indicates the message was readable in its entirety and the message matches
-      the filter
-      */
-  static int64_t filter_msg(const int8_t *src, const uint64_t rem, const std::string_view & fn_name, const std::unordered_set<std::string_view> & tbl_names);
+	  @return `-1` if insufficient data exists in the byte-sequence to read at least one complete message,
+	  @return `-2` if a parse-error occurred,
+	  @return a negative value less than `-2` if the message was recognised and parsed correctly, but did
+	    not match the filter, and that `abs(return value)` bytes should be skipped, while
+	  @return a positive number indicates the message was readable in its entirety and the message matches
+	    the filter
+	*/
+	static int64_t filter_msg(const int8_t *src, const uint64_t rem, const std::string_view & fn_name, const std::unordered_set<std::string_view> & tbl_names);
 };
 
 
 class KdbJournal
 {
-  std::filesystem::path m_path;
-  bool m_rd_only;
-  int m_jnl_fd;
-  uint64_t m_msg_count;
+	std::filesystem::path m_path;
+	bool m_rd_only;
+	int m_jnl_fd;
+	uint64_t m_msg_count;
 
 public:
-  struct Options {
-    bool read_only;
-    bool validate_and_count_upon_init;
-    uint64_t max_replay_count = UINT64_MAX;
-  };
-  /**
-    Initialises a `KdbJournal` instance at file-path `path`, observing the `bool` flag `read_only`.
+	struct Options {
+	  bool read_only;
+	  bool validate_and_count_upon_init;
+	  uint64_t max_replay_count = UINT64_MAX;
+	};
+	/**
+	  Initialises a `KdbJournal` instance at file-path `path`, observing the `bool` flag `read_only`.
 
-    If `read_only` is set and the file does not exist, the function returns an error upon failing
-    to open it.
+	  If `read_only` is set and the file does not exist, the function returns an error upon failing
+	  to open it.
 
-    If `read_only` is not set and the file does not exist, the function attempts to creates it.
-    Intermediate directories must be created in advance.
+	  If `read_only` is not set and the file does not exist, the function attempts to creates it.
 
-    If the file pre-existed the function will attempt to validate up to `max_count` messages. This
-    parameter should be retrieved from the `.u.i` (or `.u.j`) parameter in the remote TP, to avoid
-    attempting to read any partial messages.
-  */
-  static std::expected<KdbJournal,std::string> init(std::filesystem::path path, const Options & opts);
+	  If the file pre-existed the function will attempt to validate up to `max_count` messages. This
+	  parameter should be retrieved from the `.u.i` (or `.u.j`) parameter in the remote TP, to avoid
+	  attempting to read any partial messages.
+	*/
+	static std::expected<KdbJournal,std::string> init(std::filesystem::path path, const Options & opts);
 
-  static
-    std::function<int(uint64_t ith, const int8_t*, uint64_t)>
-      mk_upd_tbl_filter(const uint64_t skip_first_N, const std::string_view & fn_name,
-                      const std::unordered_set<std::string_view> & tbl_names,
-                        std::function<int(const int8_t*,uint64_t)> on_match);
+	static
+	  std::function<int(uint64_t ith, const int8_t*, uint64_t)>
+	    mk_upd_tbl_filter(const uint64_t skip_first_N, const std::string_view & fn_name,
+	                    const std::unordered_set<std::string_view> & tbl_names,
+	                      std::function<int(const int8_t*,uint64_t)> on_match);
 
 private:
-  static
-    std::expected<std::pair<uint64_t,uint64_t>,std::string>
-      _filter_msgs(int jnl_fd, uint64_t max_count, std::function<int(uint64_t ith, const int8_t*, uint64_t)> fun) noexcept;
+	static
+	  std::expected<std::pair<uint64_t,uint64_t>,std::string>
+	    _filter_msgs(int jnl_fd, uint64_t max_count, std::function<int(uint64_t ith, const int8_t*, uint64_t)> fun) noexcept;
 
 public:
-  KdbJournal(std::filesystem::path path, bool read_only, int jfd, uint64_t msg_count);
-  const std::filesystem::path & path() const noexcept { return m_path; }
-  int jnl_fd() const noexcept { return m_jnl_fd; }
-  uint64_t msg_count() const noexcept { return m_msg_count; }
-  std::optional<std::string> close() noexcept;
-  std::expected<std::pair<uint64_t,uint64_t>,std::string>
-    filter_msgs(uint64_t max_count, std::function<int(uint64_t ith, const int8_t*, uint64_t)> fun);
+	KdbJournal(std::filesystem::path path, bool read_only, int jfd, uint64_t msg_count);
+	const std::filesystem::path & path() const noexcept { return m_path; }
+	int jnl_fd() const noexcept { return m_jnl_fd; }
+	uint64_t msg_count() const noexcept { return m_msg_count; }
+	std::optional<std::string> close() noexcept;
+	std::expected<std::pair<uint64_t,uint64_t>,std::string>
+	  filter_msgs(uint64_t max_count, std::function<int(uint64_t ith, const int8_t*, uint64_t)> fun);
 };
 
 //-------------------------------------------------------------------------------- KdbQuirks

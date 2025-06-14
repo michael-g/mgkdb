@@ -50,6 +50,7 @@ endif(${SAVE_TEMPS})
 
 add_subdirectory(src)
 add_subdirectory(app)
+add_subdirectory(examples)
 
 enable_testing()
 add_subdirectory(test)

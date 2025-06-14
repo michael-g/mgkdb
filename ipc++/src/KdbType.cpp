@@ -2476,6 +2476,11 @@ int64_t KdbUtil::ipcPayloadLen(const int8_t *src, const uint64_t rem)
 
 	return msg_len_vary(src, rem);
 }
+
+ReadResult KdbUtil::newInstanceFromIpc(ReadBuf & buf, KdbBase **ptr)
+{
+	return newInstance(buf, ptr);
+}
 //--------------------------------------------------------------------------------------- KdbIpcMessageWriter
 KdbIpcMessageWriter::KdbIpcMessageWriter(KdbMsgType msg_typ, const KdbBase & msg)
  : m_msg_typ(msg_typ)
