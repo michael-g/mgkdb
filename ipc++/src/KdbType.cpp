@@ -2455,21 +2455,18 @@ int64_t KdbUtil::ipcPayloadLen(const int8_t *src, const uint64_t rem)
 	if (0 == rem)
 		return -1;
 
-	KdbType typ = static_cast<KdbType>(src[0]);
-	if (KdbType::LIST == typ) {
+	if (KdbUtil::eq(KdbType::LIST, src[0])) {
 		return msg_len_list(src, rem);
 	}
 
-	if ((src[0] >= static_cast<int8_t>(KdbType::TIME_ATOM) &&
-	     src[0] < static_cast<int8_t>(KdbType::LIST))) {
-		if (typ == KdbType::SYMBOL_ATOM)
-				return msg_len_sym_atom(src, rem);
+	if (KdbUtil::isAtom(src[0])) {
+		if (KdbUtil::eq(KdbType::SYMBOL_ATOM, src[0]))
+			return msg_len_sym_atom(src, rem);
 		return msg_len_atom(src, rem);
 	}
 
-	if (src[0] > static_cast<int8_t>(KdbType::LIST) &&
-	     src[0] <= static_cast<int8_t>(KdbType::TIME_VECTOR)) {
-		if (typ == KdbType::SYMBOL_VECTOR)
+	if (KdbUtil::isVec(src[0])) {
+		if (KdbUtil::eq(KdbType::SYMBOL_VECTOR, src[0]))
 				return msg_len_sym_vec(src, rem);
 		return msg_len_vec(src, rem);
 	}
@@ -2520,43 +2517,9 @@ WriteResult KdbIpcMessageWriter::write(void *dst, size_t cap)
 
 //-------------------------------------------------------------------------------- KdbTpUtil
 
-  // TODO   TODO  TODO  TODO  TODO  TODO  TODO  TODO  TODO  TODO  FIXME
-  // Consider byte sequence beginning at position `src` of at least `len` bytes remaining (given by
-  // the result of `read`, or a call to `fstat`, in the case of a file).
-
-  // The function will test whether the message can be read in its entirety by walking its structure
-  // beginning at `src`. If insufficient bytes remain, return `-1`.
-
-  // If argument `skip` is true, do not test the filter constraints and simply return the message length.
-
-  // If argument `skip` is `false`, look for list-like functions beginning with function name `fn_name`
-  // (as a symbol atom), and one of the names in the set `tbl_names` as the second list element.
-  // Essentially: check to see if we should include the message.
-
-  // While this is primarily intended for filtering tickerplant journals, it works just as well on IPC
-  // messages, although you need to strip-off the (v.3 8-byte) IPC header ... assuming it's not compressed.
-  // I was once told by a wise old kdb guru that if you subscribe to `localhost` then kdb+ will _not_
-  // apply IPC compresssion to the message stream. YMMV, and you should verify this with a packet sniffer.
-
-  // @param src a pointer to the first byte in the message to be checked
-  // @param rem the remaining number of bytes following `src` which are present in the buffer
-  // @param skip whether to skip this message, for example, you know you've already replayed it in an
-  //   earlier pass
-  // @param fn_name the required name of the function, as a symbol atom; only that will do
-  // @param tbl_names the set of table names to include
-
-  // @return `-1` if insufficient data exists in the byte-sequence to read at least one complete message,
-  // @return `-2` if a parse-error occurred,
-  // @return a negative value less than `-2` if the message was recognised and parsed correctly, but did
-  //   not match the filter, and that `abs(return value)` bytes should be skipped, while
-  // @return a positive number indicates the message was readable in its entirety and
-  //   (a) `skip` was set, or
-  //   (b) the message matches the filter
-  // TODO   TODO  TODO  TODO  TODO  TODO  TODO  TODO  TODO  TODO  FIXME
-
 /**
   Consider the TCP or TP-log message beginning at `src` consisting of `len` bytes, and examine whether
-  it conforms to a list-like dyadic RPC call for the function `fn_name` (_e.g._ 'upd') and for a table
+  it conforms to a list-like dyadic RPC call for the function `fn_name` (_e.g._ `upd`) and for a table
   named in the set `tbl_names`.
 
   @return `-len` if the structure of the mesasge, the function or table names do not match, otherwise
@@ -2567,7 +2530,7 @@ static int64_t _filter_upd_msg(const int8_t *src, const uint64_t len, const std:
 {
   const struct vec_hdr_s *hdr = reinterpret_cast<const struct vec_hdr_s*>(src);
 
-	if (KdbType::LIST != static_cast<KdbType>(hdr->typ))
+	if (KdbUtil::eq(KdbType::LIST, hdr->typ))
 		return -len;
 
 	const int32_t vln = hdr->len;
@@ -2576,7 +2539,7 @@ static int64_t _filter_upd_msg(const int8_t *src, const uint64_t len, const std:
 
 	uint64_t off = SZ_VEC_HDR;
 
-	if (KdbType::SYMBOL_ATOM != static_cast<KdbType>(src[off]))
+	if (KdbUtil::eq(KdbType::SYMBOL_ATOM, src[off]))
 		return -len;
 
 	off += SZ_BYTE;
@@ -2590,7 +2553,7 @@ static int64_t _filter_upd_msg(const int8_t *src, const uint64_t len, const std:
 
 	off += fln + SZ_BYTE;
 
-	if (KdbType::SYMBOL_ATOM != static_cast<KdbType>(src[off]))
+	if (KdbUtil::eq(KdbType::SYMBOL_ATOM, src[off]))
 		return -len;
 
 	off += SZ_BYTE;

@@ -1469,7 +1469,78 @@ struct KdbUtil
 	  @return a positive value describing the message length
 	*/
 	static int64_t ipcPayloadLen(const int8_t *src, const uint64_t rem);
+	/**
+	  Reads the IPC bytes in `buf` and if sufficient and correct returns in the pointer `ptr`
+	  a heap-allocated appropriate sub-class of `KdbBase`
+	  @param buf the data to read
+	  @param ptr the address of the `KdbBase*` so it can be set upon construction.
+	  @return the outcome of the operation
+	 */
 	static ReadResult newInstanceFromIpc(ReadBuf & buf, KdbBase **ptr);
+
+	/**
+	  Save on typing `static_cast<int8_t>(..)` with this function.
+	 */
+	static inline constexpr int8_t i8typ(KdbType typ) noexcept
+	{
+		return static_cast<int8_t>(typ);
+	}
+	/**
+	  Save on typeing `static_cast<int8_t>(typ.m_typ)`
+	 */
+	static inline constexpr int8_t i8typ(const KdbBase & typ) noexcept
+	{
+		return i8typ(typ.m_typ);
+	}
+	/**
+	  Determines whether the `KdbType` values of `lhs` and `lhs` are the same
+	 */
+	static inline constexpr bool eq(const KdbType lhs, int8_t rhs) noexcept
+	{
+		return static_cast<int8_t>(lhs) == rhs;
+	}
+	/**
+	  Determines whether the `KdbType` values of `lhs` and `lhs` are the same
+	 */
+	static inline constexpr bool eq(int8_t lhs, const KdbType rhs) noexcept
+	{
+		return eq(rhs, lhs);
+	}
+	/**
+	  Determines whether the `KdbType` values of `lhs` and `lhs` are the same
+	 */
+	static inline constexpr bool eq(const KdbBase & lhs, KdbType rhs) noexcept
+	{
+		return lhs.m_typ == rhs;
+	}
+	/**
+	  Returns whether the argument is in the range `[-19, 0)`
+	 */
+	static inline constexpr bool isAtom(const int8_t typ) noexcept
+	{
+		return typ >= i8typ(KdbType::TIME_ATOM) && typ < i8typ(KdbType::LIST);
+	}
+	/**
+	  Returns whether the argument's type is in the range `[-19, 0)`
+	 */
+	static inline constexpr bool isAtom(const KdbBase & typ) noexcept
+	{
+		return isAtom(i8typ(typ));
+	}
+	/**
+	  Returns whether the argument is in the range `[0, 19]`
+	 */
+	static inline constexpr bool isVec(const int8_t typ) noexcept
+	{
+		return typ > i8typ(KdbType::LIST) && typ <= i8typ(KdbType::TIME_VECTOR);
+	}
+	/**
+	  Returns whether the argument's type is in the range `[0, 19]`
+	 */
+	static inline constexpr bool isVec(const KdbBase & typ) noexcept
+	{
+		return isVec(i8typ(typ));
+	}
 };
 
 class KdbIpcMessageWriter
@@ -1540,6 +1611,15 @@ public:
 	*/
 	static std::expected<KdbJournal,std::string> init(std::filesystem::path path, const Options & opts);
 
+	/**
+	  Builds a `std::function` which can be applied to a vanilla tickerplant's 3-element `upd` message,
+	  to report to the provided `on_match` listener those messages appearing after the first `skip_first_N`
+	  messages, whose function matches `fn_name` (.e.g `upd`), and whose table-name is in the set
+	  `tbl_names`.
+
+	  The function requires the message to be in the format ``(`symbol_atom;`symbol_atom;<data>)``; char-vectors
+	  just won't do.
+	*/
 	static
 	  std::function<int(uint64_t ith, const int8_t*, uint64_t)>
 	    mk_upd_tbl_filter(const uint64_t skip_first_N, const std::string_view & fn_name,
@@ -1552,7 +1632,15 @@ private:
 	    _filter_msgs(int jnl_fd, uint64_t max_count, std::function<int(uint64_t ith, const int8_t*, uint64_t)> fun) noexcept;
 
 public:
+	/**
+	  Construct a new `KdbJournal` instance the hard way, please see the `KdbJournal::init` function.
+	  @param path the path to the journal, which may or may not need to exist (depending on `read_only`)
+	  @param read_only whether to treat the journal as read-only; reserved for future use (as at 2025-06-20)
+	  @param jfd the file descriptor of the journal to be read (_C.f._ `KdbJournal::init`)
+	  @param msg_count the number of messages currently in the journal
+	 */
 	KdbJournal(std::filesystem::path path, bool read_only, int jfd, uint64_t msg_count);
+
 	const std::filesystem::path & path() const noexcept { return m_path; }
 	int jnl_fd() const noexcept { return m_jnl_fd; }
 	uint64_t msg_count() const noexcept { return m_msg_count; }
