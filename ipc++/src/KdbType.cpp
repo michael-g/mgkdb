@@ -2307,7 +2307,7 @@ static int64_t msg_len_vary(const int8_t *src, const uint64_t rem)
 	if (0 == rem)
 		return -1;
 	int32_t len, tmp;
-	KdbType typ = static_cast<KdbType>(*src);
+	KdbType typ{*src};
 	switch(typ) {
 		case KdbType::TABLE:
 			return 2 + msg_len_vary(src + 2, rem - 2);
@@ -2455,18 +2455,18 @@ int64_t KdbUtil::ipcPayloadLen(const int8_t *src, const uint64_t rem)
 	if (0 == rem)
 		return -1;
 
-	if (KdbUtil::eq(KdbType::LIST, src[0])) {
+	if (KdbType::LIST == src[0]) {
 		return msg_len_list(src, rem);
 	}
 
 	if (KdbUtil::isAtom(src[0])) {
-		if (KdbUtil::eq(KdbType::SYMBOL_ATOM, src[0]))
+		if (KdbType::SYMBOL_ATOM == src[0])
 			return msg_len_sym_atom(src, rem);
 		return msg_len_atom(src, rem);
 	}
 
 	if (KdbUtil::isVec(src[0])) {
-		if (KdbUtil::eq(KdbType::SYMBOL_VECTOR, src[0]))
+		if (KdbType::SYMBOL_VECTOR == src[0])
 				return msg_len_sym_vec(src, rem);
 		return msg_len_vec(src, rem);
 	}
@@ -2530,7 +2530,7 @@ static int64_t _filter_upd_msg(const int8_t *src, const uint64_t len, const std:
 {
   const struct vec_hdr_s *hdr = reinterpret_cast<const struct vec_hdr_s*>(src);
 
-	if (KdbUtil::eq(KdbType::LIST, hdr->typ))
+	if (KdbType::LIST == hdr->typ)
 		return -len;
 
 	const int32_t vln = hdr->len;
@@ -2539,7 +2539,7 @@ static int64_t _filter_upd_msg(const int8_t *src, const uint64_t len, const std:
 
 	uint64_t off = SZ_VEC_HDR;
 
-	if (KdbUtil::eq(KdbType::SYMBOL_ATOM, src[off]))
+	if (KdbType::SYMBOL_ATOM == src[off])
 		return -len;
 
 	off += SZ_BYTE;
@@ -2553,7 +2553,7 @@ static int64_t _filter_upd_msg(const int8_t *src, const uint64_t len, const std:
 
 	off += fln + SZ_BYTE;
 
-	if (KdbUtil::eq(KdbType::SYMBOL_ATOM, src[off]))
+	if (KdbType::SYMBOL_ATOM == src[off])
 		return -len;
 
 	off += SZ_BYTE;

@@ -116,6 +116,11 @@ enum class KdbType
 	UNSET             = 127,
 };
 
+inline bool operator==(const KdbType & lhs, int8_t rhs) noexcept
+{
+  return lhs == static_cast<KdbType>(rhs);
+}
+
 enum class KdbMsgType
 {
 	ASYNC    = 0,
@@ -1479,34 +1484,6 @@ struct KdbUtil
 	static ReadResult newInstanceFromIpc(ReadBuf & buf, KdbBase **ptr);
 
 	/**
-	  Save on typing `static_cast<int8_t>(..)` with this function.
-	 */
-	static inline constexpr int8_t i8typ(KdbType typ) noexcept
-	{
-		return static_cast<int8_t>(typ);
-	}
-	/**
-	  Save on typeing `static_cast<int8_t>(typ.m_typ)`
-	 */
-	static inline constexpr int8_t i8typ(const KdbBase & typ) noexcept
-	{
-		return i8typ(typ.m_typ);
-	}
-	/**
-	  Determines whether the `KdbType` values of `lhs` and `lhs` are the same
-	 */
-	static inline constexpr bool eq(const KdbType lhs, int8_t rhs) noexcept
-	{
-		return static_cast<int8_t>(lhs) == rhs;
-	}
-	/**
-	  Determines whether the `KdbType` values of `lhs` and `lhs` are the same
-	 */
-	static inline constexpr bool eq(int8_t lhs, const KdbType rhs) noexcept
-	{
-		return eq(rhs, lhs);
-	}
-	/**
 	  Determines whether the `KdbType` values of `lhs` and `lhs` are the same
 	 */
 	static inline constexpr bool eq(const KdbBase & lhs, KdbType rhs) noexcept
@@ -1514,32 +1491,32 @@ struct KdbUtil
 		return lhs.m_typ == rhs;
 	}
 	/**
-	  Returns whether the argument is in the range `[-19, 0)`
+	  Returns whether the argument is in the range `[-19, -1]`
 	 */
 	static inline constexpr bool isAtom(const int8_t typ) noexcept
 	{
-		return typ >= i8typ(KdbType::TIME_ATOM) && typ < i8typ(KdbType::LIST);
+		return typ >= static_cast<int8_t>(KdbType::TIME_ATOM) && typ < static_cast<int8_t>(KdbType::LIST);
 	}
 	/**
-	  Returns whether the argument's type is in the range `[-19, 0)`
+	  Returns whether the argument's type is in the range `[-19, -1]`
 	 */
-	static inline constexpr bool isAtom(const KdbBase & typ) noexcept
+	static inline constexpr bool isAtom(const KdbBase & base) noexcept
 	{
-		return isAtom(i8typ(typ));
+		return isAtom(static_cast<int8_t>(base.m_typ));
 	}
 	/**
-	  Returns whether the argument is in the range `[0, 19]`
+	  Returns whether the argument is in the range `[1, 19]`
 	 */
 	static inline constexpr bool isVec(const int8_t typ) noexcept
 	{
-		return typ > i8typ(KdbType::LIST) && typ <= i8typ(KdbType::TIME_VECTOR);
+		return typ > static_cast<int8_t>(KdbType::LIST) && typ <= static_cast<int8_t>(KdbType::TIME_VECTOR);
 	}
 	/**
-	  Returns whether the argument's type is in the range `[0, 19]`
+	  Returns whether the argument's type is in the range `[1, 19]`
 	 */
-	static inline constexpr bool isVec(const KdbBase & typ) noexcept
+	static inline constexpr bool isVec(const KdbBase & base) noexcept
 	{
-		return isVec(i8typ(typ));
+		return isVec(static_cast<int8_t>(base.m_typ));
 	}
 };
 
