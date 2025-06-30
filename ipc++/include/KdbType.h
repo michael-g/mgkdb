@@ -116,6 +116,11 @@ enum class KdbType
 	UNSET             = 127,
 };
 
+inline bool operator==(const KdbType & lhs, int8_t rhs) noexcept
+{
+  return lhs == static_cast<KdbType>(rhs);
+}
+
 enum class KdbMsgType
 {
 	ASYNC    = 0,
@@ -1493,49 +1498,30 @@ struct KdbUtil
 		return i8typ(typ.m_typ);
 	}
 	/**
-	  Determines whether the `KdbType` values of `lhs` and `lhs` are the same
-	 */
-	static inline constexpr bool eq(const KdbType lhs, int8_t rhs) noexcept
-	{
-		return static_cast<int8_t>(lhs) == rhs;
-	}
-	/**
-	  Determines whether the `KdbType` values of `lhs` and `lhs` are the same
-	 */
-	static inline constexpr bool eq(int8_t lhs, const KdbType rhs) noexcept
-	{
-		return eq(rhs, lhs);
-	}
-	/**
-	  Determines whether the `KdbType` values of `lhs` and `lhs` are the same
-	 */
-	static inline constexpr bool eq(const KdbBase & lhs, KdbType rhs) noexcept
-	{
-		return lhs.m_typ == rhs;
-	}
-	/**
-	  Returns whether the argument is in the range `[-19, 0)`
+	  Returns whether the argument is in the range `[-19, -1]`
 	 */
 	static inline constexpr bool isAtom(const int8_t typ) noexcept
 	{
 		return typ >= i8typ(KdbType::TIME_ATOM) && typ < i8typ(KdbType::LIST);
 	}
 	/**
-	  Returns whether the argument's type is in the range `[-19, 0)`
+	  Returns whether the argument's type is in the range `[-19, -1]`
 	 */
 	static inline constexpr bool isAtom(const KdbBase & typ) noexcept
 	{
 		return isAtom(i8typ(typ));
 	}
 	/**
-	  Returns whether the argument is in the range `[0, 19]`
+	  Returns whether the argument is in the range `[1, 19]`, *NB* this excludes the
+	  type `KdbType::LIST`.
 	 */
 	static inline constexpr bool isVec(const int8_t typ) noexcept
 	{
 		return typ > i8typ(KdbType::LIST) && typ <= i8typ(KdbType::TIME_VECTOR);
 	}
 	/**
-	  Returns whether the argument's type is in the range `[0, 19]`
+	  Returns whether the argument is in the range `[1, 19]`, *NB* this excludes the
+	  type `KdbType::LIST`.
 	 */
 	static inline constexpr bool isVec(const KdbBase & typ) noexcept
 	{
