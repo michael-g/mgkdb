@@ -10,8 +10,6 @@ Please see the [examples](examples) directory for the [connect_to_kdb.cpp](examp
 
 It's worth just highlighting that when acting in a subscriber-mode, for example, or when issuing multiple queries before awaiting the responses, that there may be additional bytes in your memory buffer which belong to the _next_ message. You should check the `ReadMsgResult` object for the number of bytes read via its `bytes_consumed` value.
 
-Here's some pseudo code with a particularly unattractive while-loop condition:
-
 ### Building
 
 The system uses CMake. It's not been designed for an "in source" build, so do the usual:
