@@ -181,8 +181,8 @@ TEST(KdbIpcMessageReaderTest, TestRead10kQaViaMsgReader)
 		FAIL() << "Failed to read file tenKQa.zipc";
 
 	KdbIpcMessageReader rdr{};
-	
-	ReadMsgResult result = {};
+
+	ReadMsgResult result{};
 	bool complete = rdr.readMsg(ipc.get(), static_cast<uint64_t>(len), result);
 	EXPECT_TRUE(complete);
 	EXPECT_EQ(ReadResult::RD_OK, result.result);
@@ -206,7 +206,7 @@ TEST(KdbIpcMessageReaderTest, TestRead10kQaViaMsgReader)
 	else {
 		FAIL() << "Message was null";
 	}
-	
+
 }
 
 } // end namespace mg7x::test

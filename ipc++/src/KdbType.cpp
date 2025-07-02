@@ -1852,6 +1852,8 @@ ReadResult KdbFunction::read(ReadBuf & buf)
 	if (!buf.cursorActive())
 		buf.ffwd(SZ_BYTE + SZ_BYTE + SZ_VEC_HDR);
 
+	// this call may seem odd, but m_vec starts with size() zero, so it only fast-forwards the number
+	// of bytes that have already been consumed; in other words, when m_vec has size 0, this is a no-op.
 	buf.ffwd(m_vec.size());
 	if (m_vec.size() == m_vec.capacity())
 		return ReadResult::RD_OK;
@@ -2189,7 +2191,9 @@ bool KdbIpcMessageReader::readMsgHdr(ReadBuf & buf, ReadMsgResult & result)
 		m_byt_dez = 0;
 	}
 	else {
-		buf.ffwd((SZ_MSG_HDR + m_compressed) ? SZ_INT : 0);
+		buf.ffwd(SZ_MSG_HDR);
+		if (m_compressed)
+			buf.ffwd(SZ_INT);
 	}
 	return true;
 }
@@ -2229,7 +2233,7 @@ bool KdbIpcMessageReader::readMsgData(ReadBuf & buf, ReadMsgResult & result)
 
 bool KdbIpcMessageReader::readMsg(const void *src, uint64_t len, ReadMsgResult & result)
 {
-	ReadBuf buf{static_cast<const int8_t*>(src), len, -static_cast<int64_t>(m_byt_dez)};
+	ReadBuf buf{static_cast<const int8_t*>(src), len, -static_cast<int64_t>(m_byt_usd)};
 
 	const uint64_t hdr_pos = buf.offset();
 	if (!readMsgHdr(buf, result))
