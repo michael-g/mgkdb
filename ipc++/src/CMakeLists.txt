@@ -14,5 +14,5 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 # add_library(mgkdbipc        SHARED $<TARGET_OBJECTS:objlib>)
 # add_library(mgkdbipc_static STATIC $<TARGET_OBJECTS:objlib>)
 
-add_library(mgkdbipc STATIC KdbType.cpp)
+add_library(mgkdbipc STATIC KdbType.cpp CircularBuffer.cpp)
 target_compile_options(mgkdbipc PRIVATE -Wall -Wextra -Wpedantic -O2 -Wno-unused-parameter -Wno-unused-variable -fPIC)

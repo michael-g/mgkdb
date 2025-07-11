@@ -13,70 +13,23 @@ PARTICULAR PURPOSE. See the GNU Affero Public License for more details.
 You should have received a copy of the GNU Affero Public License along with The
 Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 */
-
-/*
-	This example shows how to use the library to connect and write some data to a
-	local KDB instance on Linux using blocking comms.
- */
-#include <sys/socket.h> // socket, connect
-#include <netinet/in.h> // sockaddr_in
-#include <arpa/inet.h> // htons, htonl
 #include <stdlib.h> // EXIT_FAILURE
-#include <unistd.h> // read
-#include <string.h> // strerror
 #include <stdint.h> // uint16_t
-#include <errno.h> // errno
 
-#include <memory> // unique_ptr
+#include "KdbType.h"
+#include "KdbIoDefs.h"
+
 #include <algorithm> // copy
 #include <vector>
 #include <print>
 
-#include "KdbType.h"
+int connect_and_login(const uint16_t port);
 
 using namespace ::mg7x;
 
 int main(void)
 {
-	int err = socket(AF_INET, SOCK_STREAM, 0);
-	if (-1 == err) {
-		std::print("ERROR: failed to create socket: {}", strerror(errno));
-		exit(EXIT_FAILURE);
-	}
-
-	int fd = err;
-	uint16_t port = 30098;
-
-	// Probably ... don't do this. Use `getaddrinfo` like a good chap with a safe pair of hands
-	struct sockaddr_in dest{0};
-	dest.sin_family = AF_INET;
-	dest.sin_addr.s_addr = htonl(0x7f000001);
-	dest.sin_port = htons(static_cast<uint16_t>(port));
-
-	err = connect(fd, (struct sockaddr*)&dest, sizeof(dest));
-	if (-1 == err) {
-		std::print("ERROR: failed to connect to {}: {}\n", port, strerror(errno));
-		exit(EXIT_FAILURE);
-	}
-
-	std::unique_ptr<char> msg{};
-
-	size_t msg_len = KdbUtil::writeLoginMsg("michaelg", "", msg);
-
-	ssize_t wrz = write(fd, msg.get(), msg_len);
-	if (wrz < 0) {
-		std::print("ERROR: while writing login-bytes: {}\n", strerror(errno));
-		exit(EXIT_FAILURE);
-	}
-
-	int8_t res_buf[1];
-	ssize_t rdz = read(fd, res_buf, 1);
-	if (-1 == rdz) {
-		std::print("ERROR: while reading login response: {}\n", strerror(errno));
-		exit(EXIT_FAILURE);
-	}
-
-	std::print(" INFO: connected on port {}\n", port);
+	int fd = connect_and_login(static_cast<uint16_t>(30098));
 
 	KdbCharVector cmd{"{0N!(`Hello;,;\"World\";!)}[]"};
 	KdbIpcMessageWriter writer{KdbMsgType::SYNC, cmd};
@@ -90,9 +43,9 @@ int main(void)
 		exit(EXIT_FAILURE);
 	}
 
-	wrz = write(fd, buf.data(), buf.capacity());
-	if (-1 == wrz) {
-		std::print("ERROR: failed to write message to KDB: {}\n", strerror(errno));
+	std::expected<ssize_t,int> sz_res = io::write(fd, buf.data(), buf.capacity());
+	if (!sz_res) {
+		std::print("ERROR: failed to write message to KDB: {}\n", strerror(!sz_res.error()));
 		exit(EXIT_FAILURE);
 	}
 
@@ -107,12 +60,12 @@ int main(void)
 	std::vector<int8_t> rd_buf(24);
 	int count = 0;
 	do {
-		rdz = read(fd, rd_buf.data() + data_len, rd_buf.capacity() - data_len);
-		if (-1 == rdz) {
-			std::print("ERROR: failed during read: {}\n", strerror(errno));
+		sz_res = io::read(fd, rd_buf.data() + data_len, rd_buf.capacity() - data_len);
+		if (!sz_res) {
+			std::print("ERROR: failed during read: {}\n", strerror(sz_res.error()));
 			exit(EXIT_FAILURE);
 		}
-		data_len += rdz;
+		data_len += sz_res.value();
 
 		uint64_t off_0 = reader.getInputBytesConsumed();
 		bool complete = reader.readMsg(rd_buf.data(), data_len, rmr);
@@ -140,5 +93,5 @@ int main(void)
 
 	std::print(" INFO: received response: {}\n", *(rmr.message.get()));
 
-	return 0;
+	return EXIT_SUCCESS;
 }

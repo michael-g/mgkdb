@@ -14,14 +14,17 @@ You should have received a copy of the GNU Affero Public License along with The
 Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 */
 
+#include <cstddef>   // exit
 #include <cstring>   // strlen
-#include <memory>    // make_shared
+#include <cmath>     // std::isnan
 #include <ostream>
 #include <stdexcept> // runtime_error
 #include <string>    // string
 #include <memory>    // make_shared
 #include <algorithm> // std::equal
-#include <cmath>     // std::isnan
+#include <iterator>  // back_inserter
+#include <format>    // format_to
+#include <print>
 
 #include "KdbType.h"
 
@@ -80,10 +83,42 @@ static std::unique_ptr<T> byteByByte(const char *hex)
 			//std::cout << "Offered buf.remaining " << buf.remaining() << " bytes at offset " << (SZ_BYTE - off) << ", got " << red << " bytes in reply\n";
 			EXPECT_EQ(i == len ? ReadResult::RD_OK : ReadResult::RD_INCOMPLETE, rr);
 		}
-
 	}
 	// TODO evaluate content of buf
 	EXPECT_EQ(len, ptr->wireSz());
+
+	auto typed_ptr = reinterpret_cast<T*>(ptr);
+	vector<int8_t> dst{};
+	{ // because I want to reuse 'off'
+		KdbIpcMessageWriter writer{KdbMsgType::ASYNC, *typed_ptr};
+		size_t ipc_len = writer.ipcLength();
+		dst.reserve(ipc_len);
+		dst.resize(ipc_len);
+		size_t off = 0;
+		size_t len = 0;
+		WriteResult wr;
+		do {
+			const size_t remaining = writer.bytesRemaining();
+			wr = writer.write(dst.data() + off, len);
+			const size_t written = remaining - writer.bytesRemaining();
+			//std::print("off {}, len {}, remaining {}, written {}, bytesRemaining {}\n", off, len, remaining, written, writer.bytesRemaining());
+			off += written;
+			len -= written;
+			len += 1;
+		} while (WriteResult::WR_OK != wr);
+
+		std::string hex_buf{};
+
+		for (size_t i = 0 ; i < ipc_len ; i++) {
+			std::format_to(std::back_inserter(hex_buf), "{:02x}", 0xFF & dst.at(i));
+			if (i > SZ_MSG_HDR && ary[i-SZ_MSG_HDR] != dst.at(i)) {
+				std::print("For type {}, we have\n", static_cast<KdbType>(ptr->m_typ));
+				std::print(" expected IPC 0x________________{}\n", hex+2);
+				std::print("     have IPC 0x{}\n", hex_buf);
+				exit(EXIT_FAILURE);
+			}
+		}
+	}
 
 	return std::unique_ptr<T>(reinterpret_cast<T*>(ptr));
 }
@@ -157,7 +192,7 @@ TEST(KdbTypeTest, TestKdbByteVectorRead1)
 	const auto vec = testReadAndStr<KdbByteVector>("0x040001000000ff", "(enlist 0xff)"s);
 	EXPECT_EQ(1, vec->count());
 	EXPECT_EQ(0xFF, 0xFF & vec->getByte(0));
-}	
+}
 
 TEST(KdbTypeTest, TestKdbByteVectorRead0)
 {
@@ -286,7 +321,7 @@ TEST(KdbTypeTest, TestKdbGuidVector) {
 
 	std::array<uint8_t,16> exp0 = {0x23 ,0xc0 ,0x68 ,0x89 ,0xfd ,0xa0 ,0x7f ,0x3d ,0xd5 ,0xb1 ,0x9a ,0xf6 ,0xc7 ,0xfc ,0xda ,0xe7};
 	EXPECT_TRUE(std::equal(exp0.cbegin(), exp0.cend(), vec->getGuid(0).cbegin()));
-	
+
 	std::array<uint8_t,16> exp1 = {0x07 ,0x99 ,0x85 ,0x43 ,0x9d ,0x01 ,0x57 ,0x04 ,0x18 ,0x99 ,0xc6 ,0xdd ,0xf1 ,0x67 ,0xa8 ,0x58 };
 	EXPECT_TRUE(std::equal(exp1.cbegin(), exp1.cend(), vec->getGuid(1).cbegin()));
 }
@@ -442,6 +477,9 @@ TEST(KdbTypeTest, TestKdbSymbolVector)
 	for (size_t i = 0 ; i < names.size() ; i++) {
 		EXPECT_EQ(names[i], vec->getString(i));
 	}
+	if (!testWrite(vec.get(), "0x0b00030000004172746875720053696d6f6e00436861726c696500")) {
+		FAIL();
+	}
 }
 
 TEST(KdbTypeTest, TestKdbSymbolVector1)
@@ -511,7 +549,7 @@ TEST(KdbTypeTest, TestKdbDict)
 		EXPECT_EQ(kry[i], keys->getChar(i));
 		EXPECT_EQ(vry[i], vals->getLong(i));
 	}
-	
+
 }
 
 TEST(KdbTypeTest, TestKdbTable)
@@ -562,6 +600,9 @@ TEST(KdbTypeTest, TestKdbFunction)
 	// q)8_-8!{x+y}
 	// 0x64000a00050000007b782b797d
 	auto fun = testReadAndStr<KdbFunction>("0x64000a00050000007b782b797d", "{x+y}");
+	if (!testWrite(fun.get(), "0x64000a00050000007b782b797d")) {
+		FAIL();
+	}
 }
 
 TEST(KdbTypeTest, TestKdbUnaryFunction)
@@ -588,7 +629,7 @@ TEST(KdbTypeTest, TestKdbBinaryFunction)
 TEST(KdbTypeTest, TestKdbTernaryFunction)
 {
 	// q)0x0000,0x06000000,raze {0x67,x} each 4h$til 6
-	// 0x000006000000670067016702670367046705 
+	// 0x000006000000670067016702670367046705
 	const char *hex = "0x000006000000670067016702670367046705";
 	// q).Q.s1 {-9!0x010000000a00000067,x} each 4h$til 6
 	// "(';/;\\;':;/:;\\:)"

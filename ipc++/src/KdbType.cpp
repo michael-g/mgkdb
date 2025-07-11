@@ -313,16 +313,16 @@ ReadResult ReadBuf::readSyms(size_t rqd, std::vector<struct LocInfo> & locs, std
 }
 
 //--------------------------------------------------------------------------------------- WriteBuf
-WriteBuf::WriteBuf(void *dst, uint64_t cap)
- : WriteBuf(dst, cap, 0)
-{
-}
-
 WriteBuf::WriteBuf(void *dst, uint64_t cap, int64_t csr)
  : m_dst(static_cast<int8_t*>(dst))
  , m_cap(cap)
  , m_csr(csr)
 {}
+
+WriteBuf::WriteBuf(void *dst, uint64_t cap)
+ : WriteBuf(dst, cap, 0)
+{
+}
 
 size_t WriteBuf::adj(size_t bytes)
 {
@@ -391,7 +391,7 @@ size_t WriteBuf::writeAry(const T ary[], size_t off, size_t cap)
 
 	T *dst = reinterpret_cast<T*>(m_dst + m_off);
 
-	std::copy(ary + off, ary + elm, dst);
+	std::copy(ary + off, ary + off + elm, dst);
 
 	adj(elm * sizeof(T));
 
@@ -678,14 +678,17 @@ WriteResult writeIntVector(const T & typ, WriteBuf & buf)
 	}
 
 	int64_t off = buf.cursorOff();
-	size_t skp = off < 0 ? -off / sizeof(E) : 0;
+	size_t skp = 0;
+	if (off < 0) {
+		skp = std::min(static_cast<size_t>(-off), typ.m_vec.size() * sizeof(E)) / sizeof(E);
+	}
 	if (skp > 0) {
 		buf.ffwd(skp * sizeof(E));
 	}
 
 	if (typ.m_vec.size() > skp) {
-		size_t rit = buf.writeAry(typ.m_vec.data(), skp, typ.m_vec.size());
-		if (skp + rit < typ.m_vec.size())
+		size_t wrt = buf.writeAry(typ.m_vec.data(), skp, typ.m_vec.size());
+		if ((skp + wrt) < typ.m_vec.size())
 			return WriteResult::WR_INCOMPLETE;
 	}
 
@@ -1421,9 +1424,10 @@ WriteResult KdbSymbolVector::write(WriteBuf & buf) const
 	}
 
 	if (skp < m_data.size()) {
-		size_t rit = buf.writeAry(m_data.data(), skp, m_data.size());
-		if (rit + skp == m_data.size())
-			return WriteResult::WR_OK;
+		size_t wrt = buf.writeAry(m_data.data(), skp, m_data.size());
+		if ((wrt + skp) < m_data.size()) {
+			return WriteResult::WR_INCOMPLETE;
+		}
 	}
 	return WriteResult::WR_OK;
 }
@@ -1711,7 +1715,7 @@ ReadResult KdbTable::read(ReadBuf & buf)
 
 WriteResult KdbTable::write(WriteBuf & buf) const
 {
-	const size_t SZ_TBL_HDR = SZ_BYTE + SZ_BYTE + SZ_BYTE;
+	constexpr size_t SZ_TBL_HDR = SZ_BYTE + SZ_BYTE + SZ_BYTE;
 	if (buf.cursorActive()) {
 		if (!buf.canWrite(SZ_TBL_HDR))
 			return WriteResult::WR_INCOMPLETE;
@@ -1833,6 +1837,7 @@ KdbFunction::KdbFunction(std::string_view fun)
  : KdbBase(KdbType::FUNCTION)
  , m_vec(fun.size())
 {
+	m_vec.resize(0);
 	m_vec.insert(m_vec.begin() + m_vec.size(), fun.data(), fun.data() + fun.size());
 }
 
@@ -1883,9 +1888,12 @@ WriteResult KdbFunction::write(WriteBuf & buf) const
 
 	int64_t off = buf.cursorOff();
 	size_t skp = off >= 0 ? 0 : std::min(static_cast<size_t>(-off), m_vec.size());
+	if (skp > 0) {
+		buf.ffwd(skp);
+	}
 
-	size_t rit = buf.writeAry(m_vec.data(), skp, m_vec.capacity());
-	if (skp + rit == m_vec.size())
+	size_t wrt = buf.writeAry(m_vec.data(), skp, m_vec.capacity());
+	if (skp + wrt == m_vec.size())
 		return WriteResult::WR_OK;
 
 	return WriteResult::WR_INCOMPLETE;
@@ -2489,11 +2497,6 @@ KdbIpcMessageWriter::KdbIpcMessageWriter(KdbMsgType msg_typ, const KdbBase & msg
  , m_root(msg)
 {
 	m_byt_rem = m_ipc_len;
-}
-
-size_t KdbIpcMessageWriter::bytesRemaining() const
-{
-	return m_byt_rem;
 }
 
 WriteResult KdbIpcMessageWriter::write(void *dst, size_t cap)

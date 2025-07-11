@@ -72,6 +72,14 @@ std::expected<int,int> getaddrinfo_a(int mode, struct gaicb** list, int nitems, 
 }
 
 inline
+void setup_sockaddr_in_ipv4_localhost_port(struct sockaddr_in & dest, uint16_t port)
+{
+	dest.sin_family = AF_INET;
+	dest.sin_addr.s_addr = htonl(0x7f000001);
+	dest.sin_port = htons(static_cast<uint16_t>(port));
+}
+
+inline
 std::expected<int,int> socket(int domain, int type, int protocol)
 {
   int ret = ::socket(domain, type, protocol);
@@ -199,6 +207,15 @@ std::expected<off_t,int> lseek(int fd, off_t offset, int whence)
     return std::unexpected(errno);
   }
   return res;
+}
+
+inline
+std::expected<int,int> ftruncate(int fd, off_t length)
+{
+	if (0 != ::ftruncate(fd, length)) {
+		return std::unexpected(errno);
+	}
+	return 0;
 }
 
 } // end namepace mg7x::io

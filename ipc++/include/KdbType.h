@@ -1532,14 +1532,15 @@ struct KdbUtil
 class KdbIpcMessageWriter
 {
 	KdbMsgType               m_msg_typ;
-	size_t                   m_ipc_len;
+	size_t                   m_ipc_len{0};
 	const KdbBase          & m_root;
-	size_t                   m_byt_rem;
+	size_t                   m_byt_rem{0};
 
 public:
 	KdbIpcMessageWriter(KdbMsgType msg_typ, const KdbBase & msg);
 
-	size_t bytesRemaining() const;
+	inline size_t ipcLength() const noexcept { return m_ipc_len; }
+	inline size_t bytesRemaining() const noexcept { return m_byt_rem; }
 	WriteResult write(void *dst, size_t cap);
 };
 
