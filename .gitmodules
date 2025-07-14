@@ -1,0 +1,3 @@
+[submodule "tpmux/contrib/kdb-tick"]
+	path = tpmux/contrib/kdb-tick
+	url = git@github.com:michael-g/kx-kdb-tick.git
