@@ -3,3 +3,6 @@ lib
 build
 test/tenKQa.zipc
 doco/
+**/.syntastic_cpp_config
+**/.cache
+**/.zed
