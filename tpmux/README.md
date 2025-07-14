@@ -33,7 +33,8 @@ the abstractions to use another type. This is a Linux-centric library at the mom
 ### Subscription
 
 The tickerplants must provide a slightly different response to the `.u.sub` call, although you could easily
-use a different function name (see the `kdb_subscribe_and_replay` [function](src/mg_coro_kdb_subscribe_replay.cpp)).
+use a different function name (see the `kdb_subscribe_and_replay`
+[function](https://github.com/michael-g/mgkdb/blob/master/tpmux/src/mg_coro_kdb_subscribe_replay.cpp#L64)).
 The `.u.sub` function must reply with the number of mesasges in its log file (`.u.i`, usually), the location
 of its log file (`.u.L`) and the schema(s) of the subscribed tables:
 ```
@@ -53,20 +54,21 @@ own which is extensively commented. Getting your head around C++ Coroutines is t
 worse by the fact that the compiler-supplied functions only exist as assembly in Compiler Explorer. I had
 limit joy using Andreas Fertig's cpp-insights tool.
 
-#### Truly verbose logging
-![Verbose logging](/michael-g/mgkdb/tpmux/docs/images/2025-07-14_tpmux_verbose_logging.png "Pretty, but prolix")
+##### Somewhat verbose logging
+![Verbose logging](https://github.com/michael-g/mgkdb/blob/master/tpmux/docs/images/2025-07-14_tpmux_verbose_logging.png "Pretty, but prolix")
+##### More concice output
+![Concise output](https://github.com/michael-g/mgkdb/blob/master/tpmux/docs/images/2025-07-14_tpmux_concise_logging.png "Concission at last")
 
-#### More concice output
-![Concise output](/michael-g/mgkdb/tpmux/docs/images/2025-07-14_tpmux_concise_logging.png "Concission at last")
-
-Both of these can be easily changed: you can turn down the log-level in [`mg_fmt_defs.h`](include/mg_fmt_defs.h#15)
-at line 15 to be one of the `_MG_TRACE_` .. `_MG_ERROR_` values.
+Both of these can be easily changed: you can turn down the log-level in
+[`mg_fmt_defs.h`](https://github.com/michael-g/mgkdb/blob/master/tpmux/include/mg_fmt_defs.h#L32)
+at line 32 to be one of the `_MG_TRACE_` .. `_MG_ERROR_` values.
 
 You can use a "Lewis Baker" symmetric-transfer coroutine implementation, or the one provided here, both
 of which act in almost exactly the same way. You can select one or the other this using a macro in the
-[`mg_coro_task.h`](include/mg_coro_tash.h#49) at line 49. It will use Andreas Buhr's
-[cppcoro](https://github.com/andreasbuhr/cppcoro) task implementation, which CMake needs to be told
-about [here](src/CmakeLists.txt#17) at line 17.
+[`mg_coro_task.h`](https://github.com/michael-g/mgkdb/blob/master/tpmux/include/mg_coro_task.h#L67) at
+line 67. It will use Andreas Buhr's [cppcoro](https://github.com/andreasbuhr/cppcoro) task implementation,
+which CMake needs to be told about
+[here](https://github.com/michael-g/mgkdb/blob/master/tpmux/src/CMakeLists.txt#L17) at line 17.
 
 To vary how verbose the logging is, update the value in
 
