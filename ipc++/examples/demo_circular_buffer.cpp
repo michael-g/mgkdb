@@ -75,7 +75,7 @@ int main(void)
 		uint64_t remaining = writer.bytesRemaining();
 		// the result is either "OK" or "INCOMPLETE"; we're going to track completion
 		// via the bytes-remaining
-		std::ignore = writer.write(buf->write_pos(), buf->writeable());
+		std::ignore = writer.write(buf->write_ptr(), buf->writeable());
 
 		// Calculate how many bytes were encoded to the buffer
 		uint64_t encoded = remaining - writer.bytesRemaining();
@@ -86,7 +86,7 @@ int main(void)
 		// We were probably able to write 100% of the available bytes to the network buffer, given
 		// how small the message actually is; this is unlikely to return a value smaller than
 		// buf->readable
-		std::expected<ssize_t,int> sz_res = io::write(fd, buf->read_off(), buf->readable());
+		std::expected<ssize_t,int> sz_res = io::write(fd, buf->read_ptr(), buf->readable());
 		if (!sz_res) {
 			std::print("ERROR: failed during write: {}", strerror(sz_res.error()));
 			return EXIT_FAILURE;

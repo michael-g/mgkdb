@@ -1323,8 +1323,9 @@ WriteResult KdbCharVector::write(WriteBuf & buf) const
 }
 
 //-------------------------------------------------------------------------------- KdbSymbolVector
-KdbSymbolVector::KdbSymbolVector(const std::vector<std::string_view> & vals)
+KdbSymbolVector::KdbSymbolVector(const std::vector<std::string_view> & vals, KdbAttr attr)
  : KdbBase(KdbType::SYMBOL_VECTOR)
+ , m_attr(attr)
  , m_locs(vals.size())
  , m_data([](const std::vector<std::string_view> & v) {
 		size_t sz = 0;
@@ -2537,16 +2538,17 @@ static int64_t _filter_upd_msg(const int8_t *src, const uint64_t len, const std:
 {
   const struct vec_hdr_s *hdr = reinterpret_cast<const struct vec_hdr_s*>(src);
 
-	if (KdbType::LIST == hdr->typ)
+	if (KdbType::LIST != hdr->typ)
 		return -len;
 
 	const int32_t vln = hdr->len;
+
 	if (vln < 3)
 		return -len;
 
 	uint64_t off = SZ_VEC_HDR;
 
-	if (KdbType::SYMBOL_ATOM == src[off])
+	if (KdbType::SYMBOL_ATOM != src[off])
 		return -len;
 
 	off += SZ_BYTE;
@@ -2560,7 +2562,7 @@ static int64_t _filter_upd_msg(const int8_t *src, const uint64_t len, const std:
 
 	off += fln + SZ_BYTE;
 
-	if (KdbType::SYMBOL_ATOM == src[off])
+	if (KdbType::SYMBOL_ATOM != src[off])
 		return -len;
 
 	off += SZ_BYTE;
@@ -2574,31 +2576,31 @@ static int64_t _filter_upd_msg(const int8_t *src, const uint64_t len, const std:
 
 int64_t KdbUpdMsgFilter::filter_msg(const int8_t *src, const uint64_t rem, const std::string_view & fn_name, const std::unordered_set<std::string_view> & tbl_names)
 {
-  if (rem < SZ_MSG_HDR)
-    return -1;
+	if (rem < SZ_MSG_HDR)
+		return -1;
 
-  if (1 != src[0]) // bad endianness, refuse
-    return -2;
+	if (1 != src[0]) // bad endianness, refuse
+		return -2;
 
-  const int32_t *s32 = reinterpret_cast<const int32_t*>(src);
-  int32_t len = s32[1];
-  if (len < 0) // check for bad length value
-    return -2;
+	const int32_t *s32 = reinterpret_cast<const int32_t*>(src);
+	int32_t len = s32[1];
+	if (len < 0) // check for bad length value
+		return -2;
 
-  // TODO assert this is not a compressed message ... the difference in the header-length at the very
-  // least will mean it doesn't work "by accident"
+	// TODO assert this is not a compressed message ... the difference in the header-length at the very
+	// least will mean it doesn't work "by accident"
 
-  if (rem < static_cast<uint64_t>(len))
-    return -1;
+	if (rem < static_cast<uint64_t>(len))
+		return -1;
 
-  int64_t res = _filter_upd_msg(src + SZ_MSG_HDR, static_cast<uint64_t>(len) - SZ_MSG_HDR, fn_name, tbl_names);
-  // We now have to adjust for the IPC message header we didn't tell the `_filter_upd_msg` function about;
-  // we increase the magnitude of `res` by SZ_MSG_HDR bytes according to its sign. This allows the calling
-  // code to account correctly for the bytes just consumed.
-  if (res < 0)
-    return res - SZ_MSG_HDR;
+	int64_t res = _filter_upd_msg(src + SZ_MSG_HDR, static_cast<uint64_t>(len) - SZ_MSG_HDR, fn_name, tbl_names);
+	// We now have to adjust for the IPC message header we didn't tell the `_filter_upd_msg` function about;
+	// we increase the magnitude of `res` by SZ_MSG_HDR bytes according to its sign. This allows the calling
+	// code to account correctly for the bytes just consumed.
+	if (res < 0)
+		return res - SZ_MSG_HDR;
 
-  return res + SZ_MSG_HDR;
+	return res + SZ_MSG_HDR;
 }
 
 //-------------------------------------------------------------------------------- KdbJournal
@@ -2611,177 +2613,172 @@ KdbJournal::KdbJournal(std::filesystem::path path, bool read_only, int jfd, uint
 }
 
 std::function<int(uint64_t ith, const int8_t*, uint64_t)>
-  KdbJournal::mk_upd_tbl_filter(const uint64_t skip_first_N, const std::string_view & fn_name,
-                                const std::unordered_set<std::string_view> & tbl_names,
-                                  std::function<int(const int8_t*,uint64_t)> on_match)
+ 	KdbJournal::mk_upd_tbl_filter(const uint64_t skip_first_N, const std::string_view & fn_name,
+ 	                              const std::unordered_set<std::string_view> & tbl_names,
+ 	                                std::function<int(const int8_t*,uint64_t)> on_match)
 {
-  return [skip_first_N, &fn_name, &tbl_names, &on_match](uint64_t ith, const int8_t *src, uint64_t len) -> int {
-    if (ith >= skip_first_N) {
-      int64_t res = _filter_upd_msg(src, len, fn_name, tbl_names);
-      if (res > 0) {
-        return on_match(src, len);
-      }
-    }
-    return 0;
-  };
+	return [skip_first_N, &fn_name, &tbl_names, &on_match](uint64_t ith, const int8_t *src, uint64_t len) -> int {
+		if (ith >= skip_first_N) {
+			int64_t res = _filter_upd_msg(src, len, fn_name, tbl_names);
+			if (res > 0) {
+				return on_match(src, len);
+			}
+		}
+		return 0;
+	};
 }
 
 std::expected<std::pair<uint64_t,uint64_t>,std::string>
-  KdbJournal::_filter_msgs(int jnl_fd, uint64_t max_count, std::function<int(uint64_t ith, const int8_t*, uint64_t)> fun) noexcept
+	KdbJournal::_filter_msgs(int jnl_fd, uint64_t max_count, std::function<int(uint64_t ith, const int8_t*, uint64_t)> fun) noexcept
 {
-  struct stat sbuf{};
-  std::expected<int,int> exp_ii = ::mg7x::io::fstat(jnl_fd, &sbuf);
-  if (!exp_ii) {
-    std::string buf{};
-    std::format_to(std::back_inserter(buf), "failed in fstat: {}", strerror(exp_ii.error()));
-    return std::unexpected(buf);
-  }
+	struct stat sbuf{};
+	std::expected<int,int> exp_ii = ::mg7x::io::fstat(jnl_fd, &sbuf);
+	if (!exp_ii) {
+		std::string buf{};
+		std::format_to(std::back_inserter(buf), "failed in fstat: {}", strerror(exp_ii.error()));
+		return std::unexpected(buf);
+	}
 
-  std::expected<void*,int> exp_vi = ::mg7x::io::mmap(nullptr, sbuf.st_size, PROT_READ, MAP_PRIVATE|MAP_POPULATE, jnl_fd, 0);
-  if (!exp_vi) {
-    std::string buf{};
-    std::format_to(std::back_inserter(buf), "failed in mmap: {}", strerror(exp_vi.error()));
-    return std::unexpected(buf);
-  }
+	std::expected<void*,int> exp_vi = ::mg7x::io::mmap(nullptr, sbuf.st_size, PROT_READ, MAP_PRIVATE|MAP_POPULATE, jnl_fd, 0);
+	if (!exp_vi) {
+		std::string buf{};
+		std::format_to(std::back_inserter(buf), "failed in mmap: {}", strerror(exp_vi.error()));
+		return std::unexpected(buf);
+	}
 
-  uint64_t msg_count = 0;
-  uint64_t use_count = 0;
-  const int8_t *src = reinterpret_cast<int8_t*>(exp_vi.value());
-  const uint64_t jnl_usz = static_cast<uint64_t>(sbuf.st_size);
+	uint64_t msg_count = 0;
+	uint64_t use_count = 0;
+	const int8_t *src = reinterpret_cast<int8_t*>(exp_vi.value());
+	const uint64_t jnl_usz = static_cast<uint64_t>(sbuf.st_size);
 
-  std::string err_msg{};
-  uint64_t off = SZ_MSG_HDR;
-  while (off < jnl_usz && msg_count < max_count) {
-    int64_t msg_len = KdbUtil::ipcPayloadLen(src + off, jnl_usz - off);
-    if (msg_len < 0) {
-      if (-1 == msg_len) {
-        std::format_to(std::back_inserter(err_msg), "incomplete journal at offset {}", off);
-      }
-      else {
-        std::format_to(std::back_inserter(err_msg), "bad journal record at offset {}", off);
-      }
-      break;
-    }
-    // res is zero if message is not used by the client, 1 if it used by the client (and should increment
-    // `use_count`) or -1 in the case of an error, in which case iteration is aborted
-    int res = fun(msg_count, src + off, msg_len);
+	std::string err_msg{};
+	uint64_t off = SZ_MSG_HDR;
+	while (off < jnl_usz && msg_count < max_count) {
+		int64_t msg_len = KdbUtil::ipcPayloadLen(src + off, jnl_usz - off);
+		if (msg_len < 0) {
+			if (-1 == msg_len) {
+				std::format_to(std::back_inserter(err_msg), "incomplete journal at offset {}", off);
+			}
+			else {
+				std::format_to(std::back_inserter(err_msg), "bad journal record at offset {}", off);
+			}
+			break;
+		}
+		// res is zero if message is not used by the client, 1 if it used by the client (and should increment
+		// `use_count`) or -1 in the case of an error, in which case iteration is aborted
+		int res = fun(msg_count, src + off, msg_len);
 
-    msg_count += 1;
-    if (-1 == res) {
-      break;
-    }
-    use_count += res;
-    off += static_cast<uint64_t>(msg_len);
-  }
+		msg_count += 1;
+		if (-1 == res) {
+			break;
+		}
+		use_count += res;
+		off += static_cast<uint64_t>(msg_len);
+	}
 
-  std::ignore = ::mg7x::io::munmap(static_cast<void*>(const_cast<int8_t*>(src)), sbuf.st_size);
-  if (err_msg.size() > 0) {
-    return std::unexpected(err_msg);
-  }
-  std::pair<uint64_t,uint64_t> rtn{msg_count, use_count};
-  return rtn;
+	std::ignore = ::mg7x::io::munmap(static_cast<void*>(const_cast<int8_t*>(src)), sbuf.st_size);
+	if (err_msg.size() > 0) {
+		return std::unexpected(err_msg);
+	}
+	std::pair<uint64_t,uint64_t> rtn{msg_count, use_count};
+	return rtn;
 }
 
 std::expected<std::pair<uint64_t,uint64_t>,std::string>
-  KdbJournal::filter_msgs(uint64_t max_count, std::function<int(uint64_t, const int8_t*, uint64_t)> fun)
+	KdbJournal::filter_msgs(uint64_t max_count, std::function<int(uint64_t, const int8_t*, uint64_t)> fun)
 {
-  return KdbJournal::_filter_msgs(m_jnl_fd, max_count, fun);
+	return KdbJournal::_filter_msgs(m_jnl_fd, max_count, fun);
 }
 
 std::expected<KdbJournal,std::string> KdbJournal::init(std::filesystem::path path, const Options & opts)
 {
-  int flags = opts.read_only ? O_RDONLY : O_CREAT|O_RDWR;
-  int mode = opts.read_only ? 0 : S_IRUSR|S_IWUSR;
-  auto io_res = ::mg7x::io::open(path.c_str(), flags, mode);
+	int flags = opts.read_only ? O_RDONLY : O_CREAT|O_RDWR;
+	int mode = opts.read_only ? 0 : S_IRUSR|S_IWUSR;
+	auto io_res = ::mg7x::io::open(path.c_str(), flags, mode);
 
-  if (!io_res) {
-    std::string buf{};
-    std::format_to(std::back_inserter(buf), "failed to open file {}: {}", path.c_str(), strerror(io_res.error()));
-    return std::unexpected(buf);
-  }
+	if (!io_res) {
+		std::string buf{};
+		std::format_to(std::back_inserter(buf), "failed to open file {}: {}", path.c_str(), strerror(io_res.error()));
+		return std::unexpected(buf);
+	}
 
-  const int jnl_fd = io_res.value();
+	const int jnl_fd = io_res.value();
 
-  struct stat sbuf{};
-  io_res = ::mg7x::io::fstat(jnl_fd, &sbuf);
+	struct stat sbuf{};
+	io_res = ::mg7x::io::fstat(jnl_fd, &sbuf);
 
-  std::string err_msg{};
-  // declare ahead of the goto statements
-  uint64_t msg_count = 0;
-  const int8_t *src = nullptr;
+	std::string err_msg{};
+	// declare ahead of the goto statements
+	uint64_t msg_count = 0;
+	const int8_t *src = nullptr;
 
-  if (!io_res) {
-    std::format_to(std::back_inserter(err_msg), "failed in fstat: {}", strerror(io_res.error()));
-    goto err_fstat;
-  }
+	if (!io_res) {
+		std::format_to(std::back_inserter(err_msg), "failed in fstat: {}", strerror(io_res.error()));
+		goto err_fstat;
+	}
 
-  if (!opts.read_only) {
-    // if it's an empty file, then we initialise with the standard little-endian header. I say "standard",
-    // but I've never seen what a big-endian system writes into a journal header
-    if (0 == sbuf.st_size) {
-      struct {
-        int8_t one     = -1;
-        int8_t two     =  1;
-        int16_t _pad16 =  0;
-        int32_t _pad32 =  0;
-      } __attribute__((packed)) header;
+	if (!opts.read_only) {
+		// if it's an empty file, then we initialise with the standard little-endian header. I say "standard",
+		// but I've never seen what a big-endian system writes into a journal header
+		if (0 == sbuf.st_size) {
+			struct {
+				int8_t one		 = -1;
+				int8_t two		 =	1;
+				int16_t _pad16 =	0;
+				int32_t _pad32 =	0;
+			} __attribute__((packed)) header;
 
-      std::expected<ssize_t,int> wr_res = ::mg7x::io::write(jnl_fd, reinterpret_cast<int8_t*>(&header), sizeof(header));
-      if (!wr_res) {
-        std::format_to(std::back_inserter(err_msg), "failed to write journal-header: {}", strerror(static_cast<int>(wr_res.error())));
-        goto err_write;
-      }
-    }
-  }
-  else if (sbuf.st_size < SZ_MSG_HDR) {
-    err_msg = "target journal lacks a viable header (and the read-only flag is set)";
-    goto err_jnl_size;
-  }
+			std::expected<ssize_t,int> wr_res = ::mg7x::io::write(jnl_fd, reinterpret_cast<int8_t*>(&header), sizeof(header));
+			if (!wr_res) {
+				std::format_to(std::back_inserter(err_msg), "failed to write journal-header: {}", strerror(static_cast<int>(wr_res.error())));
+				goto err_write;
+			}
+		}
+	}
+	else if (sbuf.st_size < SZ_MSG_HDR) {
+		err_msg = "target journal lacks a viable header (and the read-only flag is set)";
+		goto err_jnl_size;
+	}
 
-  if (sbuf.st_size > SZ_MSG_HDR && opts.validate_and_count_upon_init) {
+	if (sbuf.st_size > SZ_MSG_HDR && opts.validate_and_count_upon_init) {
 
-    auto counter = [](uint64_t ith, const int8_t *src, uint64_t len) -> int { return 1; };
+		auto counter = [](uint64_t ith, const int8_t *src, uint64_t len) -> int { return 1; };
 
-    std::expected<std::pair<uint64_t,uint64_t>,std::string> res_zz = KdbJournal::_filter_msgs(jnl_fd, opts.max_replay_count, counter);
+		std::expected<std::pair<uint64_t,uint64_t>,std::string> res_zz = KdbJournal::_filter_msgs(jnl_fd, opts.max_replay_count, counter);
 
-    if (!res_zz) {
-      err_msg = res_zz.error();
-    }
-    else {
-      std::expected<off_t,int> ls_res = ::mg7x::io::lseek(jnl_fd, sbuf.st_size, SEEK_SET);
-      if (!ls_res) {
-        std::format_to(std::back_inserter(err_msg), "failed in lseek to end of journal: {}", strerror(ls_res.error()));
-        goto err_lseek;
-      }
-    }
-    msg_count = res_zz.value().first;
-  }
+		if (!res_zz) {
+			err_msg = res_zz.error();
+		}
+		else {
+			std::expected<off_t,int> ls_res = ::mg7x::io::lseek(jnl_fd, sbuf.st_size, SEEK_SET);
+			if (!ls_res) {
+				std::format_to(std::back_inserter(err_msg), "failed in lseek to end of journal: {}", strerror(ls_res.error()));
+				goto err_lseek;
+			}
+		}
+		msg_count = res_zz.value().first;
+	}
 
-  return KdbJournal{path, opts.read_only, jnl_fd, msg_count};
+	return KdbJournal{path, opts.read_only, jnl_fd, msg_count};
 
 err_lseek:
 err_write:
 err_jnl_size:
 err_fstat:
-  std::ignore = ::mg7x::io::close(jnl_fd);
-  return std::unexpected(err_msg);
+	std::ignore = ::mg7x::io::close(jnl_fd);
+	return std::unexpected(err_msg);
 }
-
-// std::optional<std::string> KdbJournal::append(std::span<int8_t> data) noexcept
-// {
-//   return {};
-// }
 
 std::optional<std::string> KdbJournal::close() noexcept
 {
-  std::expected<int,int> res = ::mg7x::io::close(m_jnl_fd);
-  m_jnl_fd = -1;
-  if (!res) {
-    std::string buf{};
-    std::format_to(std::back_inserter(buf), "failed while closing FD {}: {}", m_jnl_fd, strerror(res.error()));
-    return buf;
-  }
-  return {};
+	std::expected<int,int> res = ::mg7x::io::close(m_jnl_fd);
+	m_jnl_fd = -1;
+	if (!res) {
+		std::string buf{};
+		std::format_to(std::back_inserter(buf), "failed while closing FD {}: {}", m_jnl_fd, strerror(res.error()));
+		return buf;
+	}
+	return {};
 }
 
 //-------------------------------------------------------------------------------- end namespace mg7x

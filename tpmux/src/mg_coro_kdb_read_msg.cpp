@@ -70,7 +70,7 @@ TASK_TYPE<std::expected<mg7x::ReadMsgResult,ErrnoMsg>>
 	mg7x::KdbIpcMessageReader rdr{};
 	mg7x::ReadMsgResult res{};
 
-	bool dun = rdr.readMsg(ary.data(), mg7x::SZ_MSG_HDR,	res);
+	bool dun = rdr.readMsg(ary.data(), mg7x::SZ_MSG_HDR, res);
 	TRA_PRINT(YEL "kdb_read_message" RST ": IPC length is {}, input-bytes consumed {}, msg_type is {}", rdr.getIpcLength(), rdr.getInputBytesConsumed(), res.msg_typ);
 	size_t off = 0;
 	// doesn't matter for v.3 IPC whether it's compressed or not, bytes [4-7] are the wire-size

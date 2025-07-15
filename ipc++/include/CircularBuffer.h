@@ -56,10 +56,10 @@ public:
 	void* map_base() const noexcept {
 		return m_base;
 	}
-	void* read_off() const noexcept {
+	void* read_ptr() const noexcept {
 		return static_cast<int8_t*>(m_base) + m_pos;
 	}
-	void* write_pos() const noexcept {
+	void* write_ptr() const noexcept {
 		return static_cast<int8_t*>(m_base) + m_pos + m_len;
 	}
 	uint64_t pos() const noexcept {
@@ -70,6 +70,10 @@ public:
 	}
 	uint64_t writeable() const noexcept {
 		return m_buf_len - m_len;
+	}
+	void clear() noexcept {
+		m_pos = 0;
+		m_len = 0;
 	}
 	void set_consumed(uint64_t count) noexcept {
 		// std::print(" CIRC: .set_consumed: count {}, m_pos {}/{}/{}, m_len {}/{}\n", count, m_pos, m_pos + count, (m_pos + count >= m_buf_len ? (m_pos + count) - m_buf_len : m_pos), m_len, m_len - count);

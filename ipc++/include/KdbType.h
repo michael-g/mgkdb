@@ -983,7 +983,7 @@ public:
 	constexpr static KdbType kdb_type = KdbType::SYMBOL_VECTOR;
 
 	KdbSymbolVector(uint64_t cap = 0, KdbAttr attr = KdbAttr::NONE);
-	KdbSymbolVector(const std::vector<std::string_view> & vals);
+	KdbSymbolVector(const std::vector<std::string_view> & vals, KdbAttr attr = KdbAttr::NONE);
 
 	uint64_t count() const override { return m_locs.size(); }
 	const std::string_view getString(uint64_t idx) const;
@@ -1580,9 +1580,9 @@ class KdbJournal
 
 public:
 	struct Options {
-	  bool read_only;
-	  bool validate_and_count_upon_init;
-	  uint64_t max_replay_count = UINT64_MAX;
+		bool read_only;
+		bool validate_and_count_upon_init;
+		uint64_t max_replay_count = UINT64_MAX;
 	};
 	/**
 	  Initialises a `KdbJournal` instance at file-path `path`, observing the `bool` flag `read_only`.
@@ -1608,15 +1608,15 @@ public:
 	  just won't do.
 	*/
 	static
-	  std::function<int(uint64_t ith, const int8_t*, uint64_t)>
-	    mk_upd_tbl_filter(const uint64_t skip_first_N, const std::string_view & fn_name,
-	                    const std::unordered_set<std::string_view> & tbl_names,
-	                      std::function<int(const int8_t*,uint64_t)> on_match);
+		std::function<int(uint64_t ith, const int8_t*, uint64_t)>
+		  mk_upd_tbl_filter(const uint64_t skip_first_N, const std::string_view & fn_name,
+		                     const std::unordered_set<std::string_view> & tbl_names,
+		                       std::function<int(const int8_t*,uint64_t)> on_match);
 
 private:
 	static
-	  std::expected<std::pair<uint64_t,uint64_t>,std::string>
-	    _filter_msgs(int jnl_fd, uint64_t max_count, std::function<int(uint64_t ith, const int8_t*, uint64_t)> fun) noexcept;
+		std::expected<std::pair<uint64_t,uint64_t>,std::string>
+			_filter_msgs(int jnl_fd, uint64_t max_count, std::function<int(uint64_t ith, const int8_t*, uint64_t)> fun) noexcept;
 
 public:
 	/**

@@ -20,3 +20,10 @@ Have matching message: (`upd;`trade;(2025.06.10D08:40:48.000000000 2025.06.10D08
 Have matching message: (`upd;`trade;(2025.06.10D08:51:00.000000000 2025.06.10D08:51:00.000000001;`ILE.L`BFA.L;134.0392955346033 196.14594101440161f;100 155))
 ...
 ```
+
+### Tickerplant Subscriber
+
+The [subscribe_to_tp.cpp](subscribe_to_tp.cpp) app showcases how this library can get you connected to a tickerplant, request the location of its log-file, replay that file (while filtering just the tables you want) and then listen for subsequent messages delivered over the wire. 
+
+It too uses blocking-IO so that the async-boilerplate doesn't get in the way. The library's components are entirely ambivalent about where their data come from: they just operate over buffers, how you get the data is up to you.
+

@@ -62,9 +62,10 @@ TASK_TYPE<std::expected<int,ErrnoMsg>> kdb_subscribe_and_replay(EpollCtl & epoll
 	DBG_PRINT(CYN "kdb_subscribe_and_replay" RST ": have sock_fd {}", conn.sock_fd());
 
 	mg7x::KdbSymbolAtom fun{".u.sub"};
-	mg7x::KdbSymbolVector tbl{sub.tables()};
+	// mg7x::KdbSymbolVector tbl{sub.tables()};
+	mg7x::KdbSymbolVector tbl{{"trade","quote"}};
 	mg7x::KdbSymbolAtom sym{};
-	mg7x::KdbList msg{3};
+	mg7x::KdbList msg{};
 	msg.push(fun);
 	msg.push(tbl);
 	msg.push(sym);

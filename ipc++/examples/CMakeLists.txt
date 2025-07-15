@@ -13,3 +13,7 @@ target_compile_options(connect_to_kdb PRIVATE -Wall)
 add_executable(demo_circular_buffer connect_to_kdb_lib.cpp demo_circular_buffer.cpp)
 target_link_libraries(demo_circular_buffer PRIVATE mgkdbipc)
 target_compile_options(demo_circular_buffer PRIVATE -Wall)
+
+add_executable(subscribe_to_tp connect_to_kdb_lib.cpp subscribe_to_tp.cpp)
+target_link_libraries(subscribe_to_tp PRIVATE mgkdbipc)
+target_compile_options(subscribe_to_tp PRIVATE -Wall)
