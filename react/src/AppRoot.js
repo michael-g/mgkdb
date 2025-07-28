@@ -56,7 +56,7 @@ export default class AppRoot extends React.Component {
       onConnected: this.kdbConnected,
       onDisconnected: this.kdbDisconnected,
     }
-    this.conn = new MgKdb.Endpoint('ws://localhost:30098', this.listener)
+    this.conn = new MgKdb.Endpoint('ws://localhost:30097', this.listener)
   }
 
   componentWillUnmount = () => {

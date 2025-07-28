@@ -1,18 +1,16 @@
-/
-This file is part of the Mg KDB-IPC Javascript Library (hereinafter "The Library").
-
-The Library is free software: you can redistribute it and/or modify it under
-the terms of the GNU Affero Public License as published by the Free Software
-Foundation, either version 3 of the License, or (at your option) any later
-version.
-
-The Library is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE. See the GNU Affero Public License for more details.
-
-You should have received a copy of the GNU Affero Public License along with The
-Library. If not, see https://www.gnu.org/licenses/agpl.txt.
-\
+// This file is part of the Mg KDB-IPC Javascript Library (hereinafter "The Library").
+// 
+// The Library is free software: you can redistribute it and/or modify it under
+// the terms of the GNU Affero Public License as published by the Free Software
+// Foundation, either version 3 of the License, or (at your option) any later
+// version.
+// 
+// The Library is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+// PARTICULAR PURPOSE. See the GNU Affero Public License for more details.
+// 
+// You should have received a copy of the GNU Affero Public License along with The
+// Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 
 .web.log:{[M]
   -1 (string .z.Z)," ",(string .z.w)," ",M
@@ -80,7 +78,7 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 
 .web.run:{
   .web.init[]
- ;system"p 30098"
+ ;system"p 30097"
  ;`send set .web.send
  ;
  }

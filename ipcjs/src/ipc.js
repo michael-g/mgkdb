@@ -13,6 +13,7 @@ PARTICULAR PURPOSE. See the GNU Affero Public License for more details.
 You should have received a copy of the GNU Affero Public License along with The
 Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 */
+
 export const MgKdb = {}
 
 MgKdb.chk_guid = function(val) {
