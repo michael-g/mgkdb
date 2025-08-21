@@ -44,31 +44,31 @@ namespace mg7x::io {
 inline
 std::expected<int,int> eventfd(unsigned int initval, int flags)
 {
-  int res = ::eventfd(initval, flags);
-  if (-1 == res) {
-    return std::unexpected(errno);
-  }
-  return res;
+	int res = ::eventfd(initval, flags);
+	if (-1 == res) {
+		return std::unexpected(errno);
+	}
+	return res;
 }
 
 inline
 std::expected<int,int> epoll_ctl(int epfd, int op, int fd, struct epoll_event *events)
 {
-  int ret = ::epoll_ctl(epfd, op, fd, events);
-  if (-1 == ret) {
-    return std::unexpected(errno);
-  }
-  return ret;
+	int ret = ::epoll_ctl(epfd, op, fd, events);
+	if (-1 == ret) {
+		return std::unexpected(errno);
+	}
+	return ret;
 }
 
 inline
 std::expected<int,int> getaddrinfo_a(int mode, struct gaicb** list, int nitems, struct sigevent *sevp)
 {
-  int ret = ::getaddrinfo_a(mode, list, nitems, sevp);
-  if (-1 == ret) {
-    return std::unexpected(errno);
-  }
-  return ret;
+	int ret = ::getaddrinfo_a(mode, list, nitems, sevp);
+	if (-1 == ret) {
+		return std::unexpected(errno);
+	}
+	return ret;
 }
 
 inline
@@ -82,131 +82,141 @@ void setup_sockaddr_in_ipv4_localhost_port(struct sockaddr_in & dest, uint16_t p
 inline
 std::expected<int,int> socket(int domain, int type, int protocol)
 {
-  int ret = ::socket(domain, type, protocol);
-  if (-1 == ret) {
-    return std::unexpected(errno);
-  }
-  return ret;
+	int ret = ::socket(domain, type, protocol);
+	if (-1 == ret) {
+		return std::unexpected(errno);
+	}
+	return ret;
 }
 
 inline
 std::expected<int,int> connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
-  int ret = ::connect(sockfd, addr, addrlen);
-  if (-1 == ret) {
-    return std::unexpected(errno);
-  }
-  return ret;
+	int ret = ::connect(sockfd, addr, addrlen);
+	if (-1 == ret) {
+		return std::unexpected(errno);
+	}
+	return ret;
 }
 
 inline
 std::expected<int,int> getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen)
 {
-  int ret = ::getsockopt(sockfd, level, optname, optval, optlen);
-  if (-1 == ret) {
-    return std::unexpected(errno);
-  }
-  return ret;
+	int ret = ::getsockopt(sockfd, level, optname, optval, optlen);
+	if (-1 == ret) {
+		return std::unexpected(errno);
+	}
+	return ret;
 }
 
 inline
 std::expected<ssize_t,int> write(int fd, const void *buf, size_t count)
 {
-  ssize_t res = ::write(fd, buf, count);
-  if (-1 == res) {
-    return std::unexpected(errno);
-  }
-  return res;
+	ssize_t res = ::write(fd, buf, count);
+	if (-1 == res) {
+		return std::unexpected(errno);
+	}
+	return res;
 }
 
 inline
 std::expected<ssize_t,int> read(int fd, void *buf, size_t count)
 {
-  ssize_t res = ::read(fd, buf, count);
-  if (-1 == res) {
-    return std::unexpected(errno);
-  }
-  return res;
+	ssize_t res = ::read(fd, buf, count);
+	if (-1 == res) {
+		return std::unexpected(errno);
+	}
+	return res;
 }
 
 inline
 std::expected<int,int> open(const char *pathname, int flags)
 {
-  int res = ::open(pathname, flags);
-  if (-1 == res) {
-    return std::unexpected(errno);
-  }
-  return res;
+	int res = ::open(pathname, flags);
+	if (-1 == res) {
+		return std::unexpected(errno);
+	}
+	return res;
 }
 
 inline
 std::expected<int,int> open(const char *pathname, int flags, mode_t mode)
 {
-  int res = ::open(pathname, flags, mode);
-  if (-1 == res) {
-    return std::unexpected(errno);
-  }
-  return res;
+	int res = ::open(pathname, flags, mode);
+	if (-1 == res) {
+		return std::unexpected(errno);
+	}
+	return res;
 }
 
 inline
 std::expected<int,int> close(int fd)
 {
-  int res = ::close(fd);
-  if (-1 == res) {
-    return std::unexpected(res);
-  }
-  return res;
+	int res = ::close(fd);
+	if (-1 == res) {
+		return std::unexpected(res);
+	}
+	return res;
 }
 
 inline
 std::expected<int,int> fstat(int fd, struct stat *statbuf)
 {
-  int res = ::fstat(fd, statbuf);
-  if (-1 == res) {
-    return std::unexpected(res);
-  }
-  return res;
+	int res = ::fstat(fd, statbuf);
+	if (-1 == res) {
+		return std::unexpected(res);
+	}
+	return res;
 }
 
 inline
 std::expected<ssize_t,int> sendfile(int out_fd, int in_fd, off_t * offset, size_t count)
 {
-  ssize_t res = ::sendfile(out_fd, in_fd, offset, count);
-  if (-1 == res) {
-    return std::unexpected(errno);
-  }
-  return res;
+	ssize_t res = ::sendfile(out_fd, in_fd, offset, count);
+	if (-1 == res) {
+		return std::unexpected(errno);
+	}
+	return res;
 }
 
 inline
 std::expected<void*,int> mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
-  void *res = ::mmap(addr, length, prot, flags, fd, offset);
-  if (MAP_FAILED == res) {
-    return std::unexpected(errno);
-  }
-  return res;
+	void *res = ::mmap(addr, length, prot, flags, fd, offset);
+	if (MAP_FAILED == res) {
+		return std::unexpected(errno);
+	}
+	return res;
+}
+
+inline
+std::expected<int,int> memfd_create(const char *name, unsigned int flags)
+{
+	int mfd = ::memfd_create(name, flags);
+	if (-1 == mfd) {
+		return std::unexpected(errno);
+	}
+	return mfd;
 }
 
 inline
 std::expected<int,int> munmap(void *addr, size_t length)
 {
-  int res = ::munmap(addr, length);
-  if (-1 == res) {
-    return std::unexpected(errno);
-  }
-  return res;
+	int res = ::munmap(addr, length);
+	if (-1 == res) {
+		return std::unexpected(errno);
+	}
+	return res;
 }
 
 inline
 std::expected<off_t,int> lseek(int fd, off_t offset, int whence)
 {
-  off_t res = ::lseek(fd, offset, whence);
-  if (-1 == res) {
-    return std::unexpected(errno);
-  }
-  return res;
+	off_t res = ::lseek(fd, offset, whence);
+	if (-1 == res) {
+		return std::unexpected(errno);
+	}
+	return res;
 }
 
 inline

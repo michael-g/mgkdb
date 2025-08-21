@@ -14,53 +14,71 @@ You should have received a copy of the GNU Affero Public License along with The
 Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 */
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <cstddef> // size_t
+#include <sys/types.h> // off_t
 
-#include "CircularBuffer.h"
-#include <memory> // std::unique_ptr
-#include <utility> // std::swap
-#include <print> // TODO REMOVEME
-
+#include "KdbIoMockDefs.h"
 #include "../src/CircularBuffer.cpp"
 
 namespace mg7x::test {
 
-TEST(CircularBufferTest, TestBasicCircBufferOps)
+static void* to_vp(uint64_t base, size_t off = 0)
+{
+	return reinterpret_cast<int8_t*>(base) + off;
+}
+
+TEST(CircularBufferTest, TestInitCircBuffer1)
 {
 	const size_t BUF_LEN = 4096;
+
+	const int mfd = 4;
+	const uint64_t base_addr = 0x7f001000L;
+	void *p_base_addr = to_vp(base_addr); // (void*)base_addr;
+
+	MMapMock mmap_mock;
+	MemFDCreateMock memfd_create_mock;
+	FTruncateMock ftrunc_mock;
+	MUnMapMock munmap_mock;
+	CloseMock close_mock;
+
+	mmap_call = &mmap_mock;
+	memfd_create_call = &memfd_create_mock;
+	ftruncate_call = &ftrunc_mock;
+	munmap_call = &munmap_mock;
+	close_call = &close_mock;
+
+	testing::InSequence marker;
+
+	// We expect there to have been three mmap calls:
+	// 1. the first call allocates twice the buf-len argument with PRIVATE/ANON backing
+	// 2. the second, which is RW and SHARED/FIXED, and
+	// 3. the third, which is also RW and SHARED/FIXED but at the contiguous second segment address
+	EXPECT_CALL(mmap_mock, call(nullptr, 2 * BUF_LEN, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0))
+		.WillOnce(testing::Return(p_base_addr));
+
+	EXPECT_CALL(memfd_create_mock, call(testing::_, 0))
+		.WillOnce(testing::Return(mfd));
+
+	EXPECT_CALL(ftrunc_mock, call(mfd, BUF_LEN))
+		.WillOnce(testing::Return(0));
+
+	EXPECT_CALL(mmap_mock, call(p_base_addr, BUF_LEN, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_FIXED, mfd, 0))
+		.WillOnce(testing::Return(p_base_addr));
+
+	EXPECT_CALL(mmap_mock, call(to_vp(base_addr, BUF_LEN), BUF_LEN, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_FIXED, mfd, 0))
+		.WillOnce(testing::Return(to_vp(base_addr, BUF_LEN)));
+
 	auto maybe_buf = mg7x::init_circ_buffer(BUF_LEN);
-	if (!maybe_buf) {
-		FAIL() << "in mg7x::init_circ_buffer: " << maybe_buf.error();
-	}
-	std::unique_ptr<CircularBuffer> buf{};
-	std::swap(buf, maybe_buf.value());
 
-	std::print("Before assertions\n");
+	// Here we're asserting that the CircularBuffer destructor, and avoiding segfaults when it
+	// calls these functions, which we have to stub-out! We may as well assert that it's closing
+	// the resources properly.
+	EXPECT_CALL(munmap_mock, call(to_vp(base_addr, BUF_LEN), BUF_LEN));
+	EXPECT_CALL(munmap_mock, call(p_base_addr, BUF_LEN));
+	EXPECT_CALL(close_mock, call(mfd));
 
-	EXPECT_TRUE(buf->is_mapped());
-	EXPECT_EQ(0, buf->pos());
-	EXPECT_EQ(0, buf->readable());
-	EXPECT_EQ(BUF_LEN, buf->writeable());
-
-	const size_t WRITE_LEN = 32;
-
-	int8_t *pos = static_cast<int8_t*>(buf->map_base()) + (BUF_LEN - WRITE_LEN / 2);
-
-	for (unsigned i = 0 ; i < WRITE_LEN ; i++) {
-		pos[i] = i+1;
-	}
-
-	for (int8_t i = 0 ; i < WRITE_LEN ; i++) {
-		EXPECT_EQ(static_cast<int8_t>(1) + i, pos[i]);
-	}
-
-	pos = static_cast<int8_t*>(buf->map_base());
-
-	for (int8_t i = 0 ; i < WRITE_LEN / 2 ; i++) {
-		EXPECT_EQ(static_cast<int8_t>(1 + WRITE_LEN / 2) + i , pos[i]);
-	}
-
-	buf.reset();
 }
 
 }; // end namespace mg7x::test
@@ -68,6 +86,7 @@ TEST(CircularBufferTest, TestBasicCircBufferOps)
 int main(int argc, char **argv)
 {
 	using namespace mg7x::test;
-	testing::InitGoogleTest(&argc, argv);
+	testing::InitGoogleMock(&argc, argv);
+	// testing::InitGoogleTest(&argc, argv);
 	return RUN_ALL_TESTS();
 }

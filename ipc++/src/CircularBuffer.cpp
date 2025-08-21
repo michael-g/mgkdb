@@ -19,11 +19,11 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 #include <sys/mman.h>   // mmap memfd_create
 #include <errno.h>
 
-#include <memory> // unique_ptr
+#include <memory>       // unique_ptr
 #include <expected>
 #include <format>
-#include <tuple> // std::ignore
-#include <utility> // std::forward
+#include <tuple>        // std::ignore
+#include <utility>      // std::forward
 
 #include "CircularBuffer.h"
 
@@ -60,22 +60,24 @@ struct ResourceCleanup
 
 std::expected<CircBufPtr,std::string> init_circ_buffer(const size_t buf_len)
 {
-	std::expected<void*,int> res_map = io::mmap(NULL, 2 * buf_len, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS/*|MAP_NORESERVE*/, -1, 0);
+	std::expected<void*,int> res_map = io::mmap(nullptr, 2 * buf_len, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
 	if (!res_map) {
 		return std::unexpected(std::format("Failed to reserve private address range: {}", strerror(res_map.error())));
 	}
 
 	void *base = res_map.value();
+	int mfd;
+
 	ResourceCleanup cleaner{base, buf_len};
 
-	int mfd = memfd_create("mg_circ_buf", 0);
-	if (-1 == mfd) {
-		return std::unexpected(std::format("Failed in memfd_create: {}", strerror(errno)));
+	std::expected<int,int> io_res = io::memfd_create("mg_circ_buf", 0);
+	if (!io_res) {
+		return std::unexpected(std::format("Failed in memfd_create: {}", strerror(io_res.error())));
 	}
 
-	cleaner.m_mfd = mfd;
+	cleaner.m_mfd = mfd = io_res.value();
 
-	std::expected<int,int> io_res = io::ftruncate(mfd, buf_len);
+	io_res = io::ftruncate(mfd, buf_len);
 	if (!io_res) {
 		return std::unexpected(std::format("Failed in ftruncate: %s", strerror(io_res.error())));
 	}

@@ -19,15 +19,17 @@ set(TARGET MgKdbIpc)
 
 project(${TARGET} LANGUAGES CXX)
 
+# Controlled via environment varialbes:
+# CMAKE_EXPORT_COMPILE_COMMANDS
+# CMAKE_GNERATOR
+# CMAKE_VERBOSE_MAKEFILE
+
 set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_VERBOSE_MAKEFILE OFF)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 
 option(SAVE_TEMPS "Save temporary files" ON)
-
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)  # this from https://github.com/ycm-core/YouCompleteMe#user-guide
 
 # https://cmake.org/pipermail/cmake/2008-September/023808.html
 IF(DEFINED CMAKE_BUILD_TYPE)

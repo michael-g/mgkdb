@@ -3,8 +3,6 @@ find_package(GTest CONFIG REQUIRED)
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/src)
 
-set(CMAKE_VERBOSE_MAKEFILE ON)
-
 function(add_test_file test_src)
 	get_filename_component(src_base ${test_src} NAME_WE)
 	set(test_libs GTest::gtest GTest::gmock)
@@ -25,3 +23,4 @@ add_test_file(KdbTypeTest.cpp)
 add_test_file(ConnectToKdbTest.cpp)
 add_test_file(KdbIpcMessageReaderTest.cpp)
 add_test_file(CircularBufferTest.cpp)
+add_test_file(CircularBufferIntegrationTest.cpp)
