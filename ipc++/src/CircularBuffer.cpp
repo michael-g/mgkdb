@@ -17,7 +17,6 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 #include <stdint.h>     //
 #include <string.h>     // memset, strnlen
 #include <sys/mman.h>   // mmap memfd_create
-#include <errno.h>
 
 #include <memory>       // unique_ptr
 #include <expected>
@@ -29,33 +28,42 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 
 namespace mg7x {
 
-struct ResourceCleanup
+struct MMapCleanup
 {
 	void   *m_base;
-	size_t  m_buf_len;
-	int     m_mfd;
+	size_t  m_len;
 
-	ResourceCleanup(void *base, size_t buf_len)
+	MMapCleanup(void *base, size_t len)
 	 : m_base(base)
-	 , m_buf_len(buf_len)
+	 , m_len(len)
 	{}
-
-	~ResourceCleanup()
+	~MMapCleanup()
 	{
-		if (nullptr != m_base) {
-			std::ignore = io::munmap(static_cast<int8_t*>(m_base) + m_buf_len, m_buf_len);
-			std::ignore = io::munmap(m_base, m_buf_len);
-		}
-		if (0 != m_mfd) {
-			std::ignore = io::close(m_mfd);
+		if (nullptr != m_base && 0 < m_len) {
+			std::ignore = io::munmap(m_base, m_len);
 		}
 	}
-
-	void disarm() noexcept
+	void disarm()
 	{
 		m_base = nullptr;
-		m_mfd = 0;
+		m_len = 0;
 	}
+};
+
+struct MemFdCleanup
+{
+	int m_fd;
+	MemFdCleanup(int fd) : m_fd{fd} {}
+	~MemFdCleanup()
+	{
+		if (m_fd) {
+			std::ignore = io::close(m_fd);
+		}
+	}
+	void disarm() {
+		m_fd = 0;
+	}
+
 };
 
 std::expected<CircBufPtr,std::string> init_circ_buffer(const size_t buf_len)
@@ -68,18 +76,20 @@ std::expected<CircBufPtr,std::string> init_circ_buffer(const size_t buf_len)
 	void *base = res_map.value();
 	int mfd;
 
-	ResourceCleanup cleaner{base, buf_len};
+	MMapCleanup root_cleaner{base, buf_len * 2};
 
 	std::expected<int,int> io_res = io::memfd_create("mg_circ_buf", 0);
 	if (!io_res) {
 		return std::unexpected(std::format("Failed in memfd_create: {}", strerror(io_res.error())));
 	}
 
-	cleaner.m_mfd = mfd = io_res.value();
+	mfd = io_res.value();
+
+	MemFdCleanup mfd_closer{mfd};
 
 	io_res = io::ftruncate(mfd, buf_len);
 	if (!io_res) {
-		return std::unexpected(std::format("Failed in ftruncate: %s", strerror(io_res.error())));
+		return std::unexpected(std::format("Failed in ftruncate: {}", strerror(io_res.error())));
 	}
 
 	res_map = io::mmap(base, buf_len, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_FIXED, mfd, 0);
@@ -90,7 +100,7 @@ std::expected<CircBufPtr,std::string> init_circ_buffer(const size_t buf_len)
 	void *tmp = res_map.value();
 
 	if (tmp != base) {
-		return std::unexpected(std::format("expected MAP_FIXED addr and response to be the same, have addr={} and result={}: {}", base, tmp, strerror(res_map.error())));
+		return std::unexpected(std::format("expected MAP_FIXED addr and response to be the same, have addr={} and result={}", base, tmp));
 	}
 
 	res_map = io::mmap(static_cast<int8_t*>(base) + buf_len, buf_len, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_FIXED, mfd, 0);
@@ -101,10 +111,11 @@ std::expected<CircBufPtr,std::string> init_circ_buffer(const size_t buf_len)
 	tmp = res_map.value();
 
 	if (tmp != (static_cast<int8_t*>(base) + buf_len)) {
-		return std::unexpected(std::format("expected MAP_FIXED addr and response to be the same, have addr={} and result={}: {}", base, tmp, strerror(res_map.error())));
+		return std::unexpected(std::format("expected MAP_FIXED addr and response to be the same, have addr={} and result={}", base, tmp));
 	}
 
-	cleaner.disarm();
+	root_cleaner.disarm();
+	mfd_closer.disarm();
 
 	return std::make_unique<CircularBuffer>(base, buf_len, mfd);
 }
