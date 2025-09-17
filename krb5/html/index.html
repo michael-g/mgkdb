@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Kerberos test</title>
+    <meta charset="utf-8" />
+    <script type="module">
+
+import { MgKdb } from '/ipc.js'
+
+window.MgKrb5 = {}
+
+class Receiver {
+
+  kdbConnected = conn => {
+    console.log("Connected")
+  }
+
+  kdbDisconnected = conn => {
+    console.log("Disconnected")
+  }
+}
+
+MgKrb5.receiver = new Receiver()
+
+window.mg_init = function() {
+  const listener = {
+    onConnected: MgKrb5.receiver.kdbConnected,
+    onDisconnected: MgKrb5.receiver.kdbDisconnected,
+  }
+  MgKrb5.conn = new MgKdb.Endpoint('ws://localhost:30097', listener)
+}
+
+    </script>
+  </head>
+  <body onload="mg_init()">
+    <div id="mg_root"></div>
+  </body>
+</html>

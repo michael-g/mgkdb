@@ -1,0 +1,526 @@
+Following https://fedoraproject.org/wiki/Kerberos_KDC_Quickstart_Guide
+
+vim -O /etc/krb5.conf /var/kerberos/krb5kdc/kdc.conf
+
+Edited `/etc/hosts` to add `mindfruit.krb` and `kerberos.mindfruit.krb` to `127.0.0.1`
+```
+michaelg@fedora:ipc++$ sudo /usr/sbin/kdb5_util -r MINDFRUIT.KRB create -s
+Initializing database '/var/kerberos/krb5kdc/principal' for realm 'MINDFRUIT.KRB',
+master key name 'K/M@MINDFRUIT.KRB'
+You will be prompted for the database Master Password.
+It is important that you NOT FORGET this password.
+Enter KDC database master key: 
+Re-enter KDC database master key to verify:
+```
+Farcical.Mosaic.29
+
+Then use `kadmin.local` (from https://web.mit.edu/kerberos/krb5-1.12/doc/admin/admin_commands/kadmin_local.html):
+> kadmin and kadmin.local are command-line interfaces to the Kerberos V5 administration system. They provide
+> nearly identical functionalities; the difference is that kadmin.local directly accesses the KDC database,
+> while kadmin performs operations using kadmind.
+
+Where `hostname -A` returns
+```
+fedora fedora fedora
+```
+
+This this is redundant:
+I create principal `admin/fedora` for `kadmin` (even though it's local):
+```
+root@fedora:/var/kerberos/krb5kdc# kadmin.local -r MINDFRUIT.KRB -q "addprinc admin/fedora"
+Authenticating as principal root/admin@MINDFRUIT.KRB with password.
+No policy specified for admin/fedora@MINDFRUIT.KRB; defaulting to no policy
+Enter password for principal "admin/fedora@MINDFRUIT.KRB": 
+Re-enter password for principal "admin/fedora@MINDFRUIT.KRB": 
+Principal "admin/fedora@MINDFRUIT.KRB" created.
+```
+Generous.Egghat.13
+
+```
+michaelg@fedora:ipc++$ sudo /sbin/service krb5kdc start
+Redirecting to /bin/systemctl start krb5kdc.service
+```
+```
+root@fedora:/var/kerberos/krb5kdc# systemctl status krb5kdc.service
+● krb5kdc.service - Kerberos 5 KDC
+     Loaded: loaded (/usr/lib/systemd/system/krb5kdc.service; disabled; preset: disabled)
+    Drop-In: /usr/lib/systemd/system/service.d
+             └─10-timeout-abort.conf
+     Active: active (running) since Mon 2025-09-15 11:35:09 BST; 22s ago
+ Invocation: 8dcdf3b5e8e947f9b907e4dcd0b5eb78
+    Process: 76722 ExecStart=/usr/sbin/krb5kdc -P /run/krb5kdc.pid $KRB5KDC_ARGS (code=exited, status=0/SUCCESS)
+   Main PID: 76724 (krb5kdc)
+      Tasks: 1 (limit: 18587)
+     Memory: 4.5M (peak: 5.2M)
+        CPU: 23ms
+     CGroup: /system.slice/krb5kdc.service
+             └─76724 /usr/sbin/krb5kdc -P /run/krb5kdc.pid
+
+Sep 15 11:35:09 fedora systemd[1]: Starting krb5kdc.service - Kerberos 5 KDC...
+Sep 15 11:35:09 fedora systemd[1]: krb5kdc.service: Can't open PID file '/run/krb5kdc.pid' (yet?) after start: No such file or directory
+Sep 15 11:35:09 fedora systemd[1]: Started krb5kdc.service - Kerberos 5 KDC.
+```
+
+```
+michaelg@fedora:ipc++$ sudo /sbin/service kadmin start
+Redirecting to /bin/systemctl start kadmin.service
+```
+```
+root@fedora:/var/kerberos/krb5kdc# systemctl restart kadmin.service
+root@fedora:/var/kerberos/krb5kdc# systemctl status kadmin.service
+● kadmin.service - Kerberos 5 Password-changing and Administration
+     Loaded: loaded (/usr/lib/systemd/system/kadmin.service; disabled; preset: disabled)
+    Drop-In: /usr/lib/systemd/system/service.d
+             └─10-timeout-abort.conf
+     Active: active (running) since Mon 2025-09-15 11:36:41 BST; 2s ago
+ Invocation: 5fe0e1da91864f2b8c388236a7e7397f
+    Process: 76834 ExecStart=/usr/sbin/kadmind -P /run/kadmind.pid $KADMIND_ARGS (code=exited, status=0/SUCCESS)
+   Main PID: 76836 (kadmind)
+      Tasks: 1 (limit: 18587)
+     Memory: 22.1M (peak: 22.1M)
+        CPU: 138ms
+     CGroup: /system.slice/kadmin.service
+             └─76836 /usr/sbin/kadmind -P /run/kadmind.pid
+
+Sep 15 11:36:41 fedora systemd[1]: Starting kadmin.service - Kerberos 5 Password-changing and Administration...
+Sep 15 11:36:41 fedora systemd[1]: Started kadmin.service - Kerberos 5 Password-changing and Administration.
+```
+
+```
+michaelg@fedora:ipc++$ sudo /usr/sbin/kadmin.local -r MINDFRUIT.KRB -q "addprinc michaelg"
+Authenticating as principal root/admin@MINDFRUIT.KRB with password.
+No policy specified for michaelg/admin@MINDFRUIT.KRB; defaulting to no policy
+Enter password for principal "michaelg/admin@MINDFRUIT.KRB": 
+Re-enter password for principal "michaelg/admin@MINDFRUIT.KRB": 
+Principal "michaelg/admin@MINDFRUIT.KRB" created.
+```
+Fortunate.Mandible.71
+
+Check the database:
+```
+root@fedora:/var/kerberos/krb5kdc# kdb5_util -r MINDFRUIT.KRB tabdump -ce keydata
+name,keyindex,kvno,enctype,key,salttype,salt
+K/M@MINDFRUIT.KRB,0,1,aes256-cts-hmac-sha384-192,20009ac149f47ce519b54f8e1cbf899b4e287912b99fdbe129809558b42dea7b240024b5a4182e543835d9346fcc3a4d722eadcce92cf3ce626e1fc87152379dbacbd93a9c440beab8b6,normal,
+admin/fedora@MINDFRUIT.KRB,0,1,aes256-cts-hmac-sha384-192,2000a391fb4b176b0300fe8b687942068cb1c4091680346df0b4886ba4afe3ae3eee0d9e2ab7905e129fbb4be4e1334a31c3b54c8369ade31e574afc846fe74d411b4e6927d2097f1079,normal,
+admin/fedora@MINDFRUIT.KRB,1,1,aes128-cts-hmac-sha256-128,1000173acf5e520b7e7973beec4198e6b144ccb4bd689f3a51a98b4bb500feccdc95fb413ed4a73511cfd24adcc4e359a5d1ebb27c9be401a7be,normal,
+admin/fedora@MINDFRUIT.KRB,2,1,aes256-cts-hmac-sha1-96,20001b5a1675562849eda97fb8e6c46b37fa63347a8c067384a7a67f045275a456321eb7f38d1353ab6619a58db9a4a2234fc9daa5200b85db3eb50322a161f9d61d5ae8fecf057475e3,normal,
+admin/fedora@MINDFRUIT.KRB,3,1,aes128-cts-hmac-sha1-96,1000a3e5b1ac241c8129e7e6028ec6f5fa76725cf28e9c77643502a9921640351d8ec8663998338f5799936853b3f3e0a595af2ef60bdbb0b76f,normal,
+admin/fedora@MINDFRUIT.KRB,4,1,camellia256-cts-cmac,20009cd6a0ec37f32ad8b806fdec124849d7922882cab70936844b1b07394bdd1b4fae0264f238d13ccd7f49c9b051b4adeec391a60408f39383c86ec5e7638a1788d12b02e14cfd0d3c,normal,
+admin/fedora@MINDFRUIT.KRB,5,1,camellia128-cts-cmac,100085a168c0585e2aebcddcbfdca500c2fc6b2a05e4fbaf04ad0c0d3cefbdba7465d6df86d5066173f942b494e2d6250c974642e2a4f2cd7a13,normal,
+admin/fedora@MINDFRUIT.KRB,6,1,arcfour-hmac,10001f17a8524fef03bd485fc5de846a877bbd49c3574f17a4d0c9edf57e1b9e03a02b804d715ba17195a5ba46ac38a2151896258a72fd031ce7,normal,
+kadmin/admin@MINDFRUIT.KRB,0,1,aes256-cts-hmac-sha384-192,20004a9105e04751229402f580b253beacd3cab6422c8d75c7a9c0e398c7a7eb9d656e5239daaa53679ac6c37c97d1b62af9905ad219d00397b4f3d3deb694b43ccec126936637b87631,normal,
+kadmin/admin@MINDFRUIT.KRB,1,1,aes128-cts-hmac-sha256-128,10001d1cebd9267101721feb0b6a4eb7b2e987ca640ef2336ed8ce2770119e5cc6049ccc1dd248d32dc359fe5008d986ae232e63370ddea3752c,normal,
+kadmin/admin@MINDFRUIT.KRB,2,1,aes256-cts-hmac-sha1-96,2000e35fe6f817f5dd98a22efbe1d49257ae625d0cc3e9acf42993fb1a7b6173e04eebd1fa438707c4fee3ec7094802a7d7a913f854ee73db425b52143481dd222023a96c574acc02822,normal,
+kadmin/admin@MINDFRUIT.KRB,3,1,aes128-cts-hmac-sha1-96,1000b522fb044a4c15e80bae13fcbe2721ce892ae4e392d12f590745528e4105af86d4a08c63b4b7000d31685ae27ab8f550209732d134081d3b,normal,
+kadmin/admin@MINDFRUIT.KRB,4,1,camellia256-cts-cmac,2000a8956bfbe15a2e80cf65faecfdc7c5166f363bfc8ef7406ea6fb4dbb040e755d3fedb12e5867614f37d60bf96737d23d0107a32979ebe0debfc847dbf988c671aeb8d61cf7aacf5f,normal,
+kadmin/admin@MINDFRUIT.KRB,5,1,camellia128-cts-cmac,1000af3403f155f3344665ddf0f03072561086a20bb557e472603001ff10a9b4b9e4419eb2ea6972fcfe1789b423cee8eac5e0ed87d911e265f3,normal,
+kadmin/admin@MINDFRUIT.KRB,6,1,arcfour-hmac,100084708742c08a28d95fe52afcc4a46bff923ffe66cb5407aeae28c4cae8bf002f3736bcd4314a41eb63cbe286ccc27f55a2be438d82467531,normal,
+kadmin/changepw@MINDFRUIT.KRB,0,1,aes256-cts-hmac-sha384-192,200003dab9197812c5fdf2ac7fe593c86a4ce7548cabf96341aed88e37c89c4597a037cd90327d0ea40cfbd6eff694b4fc3bea8fa136d302cb34f27c5fae369d76cc293359e31e7d72fd,normal,
+kadmin/changepw@MINDFRUIT.KRB,1,1,aes128-cts-hmac-sha256-128,100009ad37aeddea2631675d17a3aadd795bcb957258e37fd621089381bd629ff02d6f9546ae3837e2463a67a22b8ff81bb9f8122838227cfc85,normal,
+kadmin/changepw@MINDFRUIT.KRB,2,1,aes256-cts-hmac-sha1-96,200011101c224c32065ba7085f25f0269b784872c1281cd63d597a15ee4b6df927f4666ab45e086828b46a06fca4fd8fdbc03b190c80ac60450dbe9f1b6e72b118fa735e378e323b3f41,normal,
+kadmin/changepw@MINDFRUIT.KRB,3,1,aes128-cts-hmac-sha1-96,100028ef02c46df0529f4b28858e4503c73683f6b8619fa7f0c12ec261efae2a1cb72653c94035c38f92958bfcf669be89ba54b93497f4cdb7f1,normal,
+kadmin/changepw@MINDFRUIT.KRB,4,1,camellia256-cts-cmac,20000166d6c8c762677fbecc7c42c57bfbcd520f2068e6f5e9456f5921cbe854ad59dcbaac9252ebc925c423d21de9cb6db1134e06affe187cf759fb9023adb1ef5f92bca6a3bc5bd012,normal,
+kadmin/changepw@MINDFRUIT.KRB,5,1,camellia128-cts-cmac,1000236a72c58705377fc5b36aa081daf0b94c98b2ba390938bccfb9f5855d8d87fe6ec55976b9b4530343f9d203bd77966d4debfba3517db944,normal,
+kadmin/changepw@MINDFRUIT.KRB,6,1,arcfour-hmac,100064097a6d6ad0aa387cc390b4dd2f5df37333cfe452e018d9598503426a21b0bf12d8d5112b63159ca436e1b56f00f86361927f09cad36626,normal,
+krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB,0,1,aes256-cts-hmac-sha384-192,200019d80e55ddd16cdd8d6bb53addf158c9fe9c70705d6feb96798ddc48c1893e47e65a16907b56bf7ec43153b49c60fe7fea7b2219426979bf491995538dbdec54b02fc2934bbef173,normal,
+krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB,1,1,aes128-cts-hmac-sha256-128,1000943ac249c4c532f773858e67514d239c706c6ef16efd5e6919f5d7b2ccca7db48f699207adf06129c904ae9c84b8dd9f502a4de43ad9709c,normal,
+krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB,2,1,aes256-cts-hmac-sha1-96,2000c0e739a66c257ed74724c34df4e89c78064dff8efa65bae7574b4f8e705255e7ffb04b12cc0d942b6f52eb7b6d9a4319cd9447bd11ca2bae78d8b1d984a0539999a178c2964f2092,normal,
+krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB,3,1,aes128-cts-hmac-sha1-96,10005c767a0981976eb2fd7b7aebba90875534f1c399e14a4334fb1d9b6de77619fa1be189878db80d9725b2361fb574a5f3b816d5b3db28df90,normal,
+krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB,4,1,camellia256-cts-cmac,2000ba60b928f5cb0910956cca6ff216275269bafb631f03c26bc0544659491d4fe6ed4e2dfb2bb6acaeb319cbd8c86107996e5b26b3f80258bd547212f46266e3fbd9ffed7f8206c22a,normal,
+krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB,5,1,camellia128-cts-cmac,10000467bc5e6d163d2fb723f9e95c9f739873887cacdd8faddd9ff728df5d6505075c1f97a7fb11c3f5bd3d8ff90408fc99f8f5dc139008995c,normal,
+krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB,6,1,arcfour-hmac,100054f5415f4ad29a5d848a77bc02034d43a98f33d455c4600f5b9e0a8bb3973d4ea644f521199eab5f032d1745b1fbd2e571fe1617c73f27da,normal,
+michaelg@MINDFRUIT.KRB,0,1,aes256-cts-hmac-sha384-192,2000e5424a6daa268e2018210162f76420549b951a3bdc42dcca0fd55f310e4f6667b128e588db434c2e17ea990413f4cff565c352af3dcc156573593ee5b3c755c0240c03768f4eeefb,normal,
+michaelg@MINDFRUIT.KRB,1,1,aes128-cts-hmac-sha256-128,1000dd57db8ebbadefc69badf5241010451354325c97d3e188c1022e7acaa3521df8c4814d19a01ba08509aae6ed7c734319446d7fd3529d89bf,normal,
+michaelg@MINDFRUIT.KRB,2,1,aes256-cts-hmac-sha1-96,2000a896f3b26e68a6263e7c6d48cdd003309b4cc9a81f62a1ea58bce76408bc995a0712d3dab1288b8925d4661ee9d22885b5be7bd519df3c0e00cc2169dce3e126b03f396fc050ab6a,normal,
+michaelg@MINDFRUIT.KRB,3,1,aes128-cts-hmac-sha1-96,10001ba9fe25f0c8452e3d132c90f798609131ceb4ce848e04a20ea05816c12f7f2ca33168e33b22fcd5f412c4b7ee145ac530ea4b55a66c8df5,normal,
+michaelg@MINDFRUIT.KRB,4,1,camellia256-cts-cmac,200020b048adcbe858a8bb31cec132abeb86448e345ee97e9b16dbd4f40be5323b7ec65725c02013f7b6cb0839918d405efe9a238a6808151ef4ff08c36df3de10eeebdeda93da1ca8f8,normal,
+michaelg@MINDFRUIT.KRB,5,1,camellia128-cts-cmac,10008cc0b58a87ecd4fa7b7e0ccb6fe2963424057d77f2de3d1cc3f9ec280909504a1ff3e76c553dd6677858f6c1a4126c5bcb11ad71315f3c67,normal,
+michaelg@MINDFRUIT.KRB,6,1,arcfour-hmac,100009cce1c8779eaad738d289f8e3ae87c232140f191cf20ab6590826d6e91698bd6654a3c10c0248e9a835577894d160cd9b708dc7f5c95630,normal,
+```
+
+Run `kinit` passing `michaelg@MINDFRUIT.KRB`; it defaults to `michaelg/admin@MINDFRUIT.KRB`.
+Use the `-c` switch:
+```
+michaelg@fedora:~$ kinit -C -c /home/michaelg/.krb5/krb5cc michaelg@MINDFRUIT.KRB
+Password for michaelg@MINDFRUIT.KRB: 
+```
+
+OK, so now with `klist`:
+```
+michaelg@fedora:krb5$ klist ~/.krb5/krb5cc 
+Ticket cache: FILE:/home/michaelg/.krb5/krb5cc
+Default principal: michaelg@MINDFRUIT.KRB
+
+Valid starting     Expires            Service principal
+15/09/25 12:24:25  16/09/25 12:24:15  krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB
+        renew until 15/09/25 12:24:25
+```
+
+Create a keytab. Using https://docs.fedoraproject.org/en-US/infra/howtos/create_keytab/.
+```
+michaelg@fedora:krb5$ kvno -c ~/.krb5/krb5cc michaelg@MINDFRUIT.KRB
+michaelg@MINDFRUIT.KRB: kvno = 1
+```
+
+Run `ktutil`, and at its console, enter the following:
+```
+At the `ktutil` console, enter the information as follows, using password `Fortunate.Mandible.71` when prompted:
+ktutil:  addent -password -p michaelg@MINDFRUIT.KRB -k 1 -f
+Password for michaelg@MINDFRUIT.KRB:
+ktutil:  write_kt /home/michaelg/.krb5/michaelg.keytab
+ktutil:  quit
+```
+
+```
+export KRB5_KTNAME=/home/michaelg/.krb5/michaelg.keytab
+```
+
+
+------------------------------------------8<----8<------------------------------------------------
+I then logged out of my KDE session, and logged back in. It showed me a balloon warning that it
+could not log-in via `michaelg/admin@MINDFRUIT.KRB`. If you click the balloon, it opens the "Online
+Accounts" page in the KDE Settings applet. Here I deleted the `michaelg/admin@MINDFRUIT.KRB` 
+account, leaving just the `michaelg@MINDFRUIT.KRB` account. I'm going to log-out and back in again
+to see what happens ...
+
+This seems to have worked. I didn't see the warning this time.
+------------------------------------------8<----8<------------------------------------------------
+
+Adding the HTTP service account and going to generate a keytab that I can reference via an 
+environment variable for the KDB session. In RFC 4559 https://www.rfc-editor.org/rfc/rfc4559.html at
+the end of section 4.1, we find: 
+
+> When the Kerberos Version 5 GSSAPI mechanism [RFC4121] is being used, the
+> HTTP server will be using a principal name of the form of "HTTP/hostname".
+
+As `root`:
+```
+kadmin.local -r MINDFRUIT.KRB -q "addprinc -randkey -maxlife 0 HTTP/fedora"
+```
+and (via https://www.ibm.com/docs/en/spectrum-conductor/2.5.0?topic=hosts-creating-kerberos-principals-primary-compute-host-authentication)
+```
+kadmin.local -r MINDFRUIT.KRB -q "ktadd -k HTTP_fedora.keytab –norandkey HTTP/fedora@MINDFRUIT.KRB"
+```
+```
+Authenticating as principal root/admin@MINDFRUIT.KRB with password.
+kadmin.local: Principal –norandkey does not exist.
+Entry for principal HTTP/fedora@MINDFRUIT.KRB with kvno 2, encryption type aes256-cts-hmac-sha384-192 added to keytab WRFILE:HTTP_fedora.keytab.
+Entry for principal HTTP/fedora@MINDFRUIT.KRB with kvno 2, encryption type aes128-cts-hmac-sha256-128 added to keytab WRFILE:HTTP_fedora.keytab.
+Entry for principal HTTP/fedora@MINDFRUIT.KRB with kvno 2, encryption type aes256-cts-hmac-sha1-96 added to keytab WRFILE:HTTP_fedora.keytab.
+Entry for principal HTTP/fedora@MINDFRUIT.KRB with kvno 2, encryption type aes128-cts-hmac-sha1-96 added to keytab WRFILE:HTTP_fedora.keytab.
+Entry for principal HTTP/fedora@MINDFRUIT.KRB with kvno 2, encryption type camellia256-cts-cmac added to keytab WRFILE:HTTP_fedora.keytab.
+Entry for principal HTTP/fedora@MINDFRUIT.KRB with kvno 2, encryption type camellia128-cts-cmac added to keytab WRFILE:HTTP_fedora.keytab.
+Entry for principal HTTP/fedora@MINDFRUIT.KRB with kvno 2, encryption type arcfour-hmac added to keytab WRFILE:HTTP_fedora.keytab.
+```
+```
+root@fedora:~# file HTTP_fedora.keytab
+HTTP_fedora.keytab: Kerberos Keytab file, realm=MINDFRUIT.KRB, principal=HTTP/fedora, type=1, date=Mon Sep 15 12:21:34 2025, kvno=2
+```
+
+Check principals created:
+```
+root@fedora:~# kadmin.local
+Authenticating as principal root/admin@MINDFRUIT.KRB with password.
+kadmin.local:  listprincs
+HTTP/fedora@MINDFRUIT.KRB
+K/M@MINDFRUIT.KRB
+admin/fedora@MINDFRUIT.KRB
+kadmin/admin@MINDFRUIT.KRB
+kadmin/changepw@MINDFRUIT.KRB
+krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB
+michaelg@MINDFRUIT.KRB
+root/admin@MINDFRUIT.KRB
+```
+
+---------------------------------------------8<----8<---------------------------------------------
+I tried creating a `root/admin` ticket, per https://rangareddy.github.io/KerberoSetup/, adding a
+`root/admin` principal. As `root`, do:
+```
+kadmin.local
+addprinc root/admin
+Cornelius.Gopher.19
+```
+Then 
+```
+kinit root/admin
+```
+using `Cornelius.Gopher.19`; then, test with `klist`, and remove with 
+```
+kdestroy -p root/admin
+```
+All checks out (no surprise, really). No need to repeat this.
+
+---------------------------------------------8<----8<---------------------------------------------
+Renewing expired tickets for the Client
+---------------------------------------
+
+When running gss_accept_sec_context we see the error GSS_S_CREDENTIALS_EXPIRED; to renew the ticket
+we can run `kinit` with the `-R` option, as follows:
+```
+kinit -R -k -t /home/michaelg/.krb5/michaelg.keytab michaelg@MINDFRUIT.KRB
+```
+The longer output using `KRB5_TRACE` shows the following:
+```
+michaelg@fedora:build$ KRB5_TRACE=/dev/stdout kinit -R -k -t /home/michaelg/.krb5/michaelg.keytab michaelg@MINDFRUIT.KRB
+```
+```
+[159005] 1758094669.644352: Matching michaelg@MINDFRUIT.KRB in collection with result: 0/Success
+[159005] 1758094669.644353: Getting initial credentials for michaelg@MINDFRUIT.KRB
+[159005] 1758094669.644354: Found entries for michaelg@MINDFRUIT.KRB in keytab: aes256-sha2
+[159005] 1758094669.644356: Sending unauthenticated request
+[159005] 1758094669.644357: Sending request (203 bytes) to MINDFRUIT.KRB
+[159005] 1758094669.644358: Resolving hostname kerberos.mindfruit.krb
+[159005] 1758094669.644359: Sending initial UDP request to dgram 127.0.0.1:88
+[159005] 1758094669.644360: Received answer (473 bytes) from dgram 127.0.0.1:88
+```
+```
+[159005] 1758094669.644361: Sending DNS URI query for _kerberos.MINDFRUIT.KRB.
+[159005] 1758094669.644362: No URI records found
+```
+```
+[159005] 1758094669.644363: Sending DNS SRV query for _kerberos-master._udp.MINDFRUIT.KRB.
+[159005] 1758094669.644364: Sending DNS SRV query for _kerberos-master._tcp.MINDFRUIT.KRB.
+[159005] 1758094669.644365: No SRV records found
+```
+```
+[159005] 1758094669.644366: Response was not from primary KDC
+[159005] 1758094669.644367: Received error from KDC: -1765328359/Additional pre-authentication required
+[159005] 1758094669.644370: Preauthenticating using KDC method data
+[159005] 1758094669.644371: Processing preauth types: PA-FX-FAST (136), PA-ETYPE-INFO2 (19), PA-SPAKE (151), PA-ENC-TIMESTAMP (2), PA-FX-COOKIE (133)
+[159005] 1758094669.644372: Selected etype info: etype aes256-sha2, salt "MINDFRUIT.KRBmichaelg", params ""
+[159005] 1758094669.644373: Received cookie: MIT1\x00\x00\x00\x01<\x91e\x01a\x1fr\x85\x94\xe5\x0f\xae\xa7H\xa5\x0e\x84\xd9.i\x96\xd1\xfe1B\xedre\xf5c\xf2\x0a\x90aT^\xf3\xcfY\xd5\x04\x1cQ\xea\x0f.4\x11r\xfa\xbet\xf5\x86\x86\x09\x07\x01{\x8a\x0d\xc8\x87Y5\xfb\x95{m\xae\xa7\xefw\xf0\xb4lu\Y\x8f\xb0\xf5\x17SRB\xbc\x94\x09S>\x91*\x1d_\xa0\x97\xe2\x00\xaa\xa2DE\xe5\xc6\xf5!\xcf\x1b\xdbg\xa5_\xbbP6O5\xb0P\xbe\x9f\xe8\x15\xd8J\x96>\xa2 \x90\x1f)\x1cbs\xf4/ev\x18\xd1
+[159005] 1758094669.644374: SPAKE challenge received with group 1, pubkey FB1DC862BB39A499737687B10352C204AE67FFF338ECE16A552AE5990052BA73
+[159005] 1758094669.644375: Retrieving michaelg@MINDFRUIT.KRB from FILE:/home/michaelg/.krb5/michaelg.keytab (vno 0, enctype aes256-sha2) with result: 0/Success
+[159005] 1758094669.644376: SPAKE key generated with pubkey 2EF1AFF369E403DD333966096227308B417447790D184EFDC007DAD3F43290E3
+[159005] 1758094669.644377: SPAKE algorithm result: 40777987E0B8E00D57FAD552D685F60FACC2E34E03A998FBF73D8BBB09A2C3A1
+[159005] 1758094669.644378: SPAKE final transcript hash: C8CF0139FA0B991C181BAB1ECB183B2528A4366E7D8648AF6C1EC5DC774ED7E5
+[159005] 1758094669.644379: Sending SPAKE response
+[159005] 1758094669.644380: Preauth module spake (151) (real) returned: 0/Success
+[159005] 1758094669.644381: Produced preauth for next request: PA-FX-COOKIE (133), PA-SPAKE (151)
+[159005] 1758094669.644382: Sending request (486 bytes) to MINDFRUIT.KRB
+[159005] 1758094669.644383: Resolving hostname kerberos.mindfruit.krb
+[159005] 1758094669.644384: Sending initial UDP request to dgram 127.0.0.1:88
+[159005] 1758094669.644385: Received answer (939 bytes) from dgram 127.0.0.1:88
+[159005] 1758094669.644386: Sending DNS URI query for _kerberos.MINDFRUIT.KRB.
+[159005] 1758094669.644387: No URI records found
+[159005] 1758094669.644388: Sending DNS SRV query for _kerberos-master._udp.MINDFRUIT.KRB.
+[159005] 1758094669.644389: Sending DNS SRV query for _kerberos-master._tcp.MINDFRUIT.KRB.
+[159005] 1758094669.644390: No SRV records found
+[159005] 1758094669.644391: Response was not from primary KDC
+[159005] 1758094669.644392: Processing preauth types: PA-ETYPE-INFO2 (19)
+[159005] 1758094669.644393: Selected etype info: etype aes256-sha2, salt "MINDFRUIT.KRBmichaelg", params ""
+[159005] 1758094669.644394: Produced preauth for next request: (empty)
+[159005] 1758094669.644395: AS key determined by preauth: aes256-sha2/1E70
+[159005] 1758094669.644396: Decrypted AS reply; session key is: aes256-sha2/97CC
+[159005] 1758094669.644397: FAST negotiation: available
+[159005] 1758094669.644398: Resolving unique ccache of type MEMORY
+[159005] 1758094669.644399: Initializing MEMORY:1VT8mrq with default princ michaelg@MINDFRUIT.KRB
+[159005] 1758094669.644400: Storing config in MEMORY:1VT8mrq for krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB: fast_avail: yes
+[159005] 1758094669.644401: Storing michaelg@MINDFRUIT.KRB -> krb5_ccache_conf_data/fast_avail/krbtgt\/MINDFRUIT.KRB\@MINDFRUIT.KRB@X-CACHECONF: in MEMORY:1VT8mrq
+[159005] 1758094669.644402: Storing config in MEMORY:1VT8mrq for krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB: pa_type: 151
+[159005] 1758094669.644403: Storing michaelg@MINDFRUIT.KRB -> krb5_ccache_conf_data/pa_type/krbtgt\/MINDFRUIT.KRB\@MINDFRUIT.KRB@X-CACHECONF: in MEMORY:1VT8mrq
+[159005] 1758094669.644404: Storing michaelg@MINDFRUIT.KRB -> krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB in MEMORY:1VT8mrq
+[159005] 1758094669.644405: Moving ccache MEMORY:1VT8mrq to KCM:1000:97235
+[159005] 1758094669.644406: Initializing KCM:1000:97235 with default princ michaelg@MINDFRUIT.KRB
+[159005] 1758094669.644407: Storing michaelg@MINDFRUIT.KRB -> krb5_ccache_conf_data/fast_avail/krbtgt\/MINDFRUIT.KRB\@MINDFRUIT.KRB@X-CACHECONF: in KCM:1000:97235
+[159005] 1758094669.644408: Storing michaelg@MINDFRUIT.KRB -> krb5_ccache_conf_data/pa_type/krbtgt\/MINDFRUIT.KRB\@MINDFRUIT.KRB@X-CACHECONF: in KCM:1000:97235
+[159005] 1758094669.644409: Storing michaelg@MINDFRUIT.KRB -> krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB in KCM:1000:97235
+[159005] 1758094669.644410: Destroying ccache MEMORY:1VT8mrq
+```
+To add SRV records to the localhost, perhaps see an SO answer like this https://serverfault.com/a/1128282
+```
+michaelg@fedora:build$ klist --help
+Usage: klist [-e] [-V] [[-c] [-l] [-A] [-d] [-f] [-s] [-a [-n]]] [-k [-i] [-t] [-K]] [-C] [name]
+  -e shows the encryption type
+  options for keytabs:
+    -t shows keytab entry timestamps
+    -K shows keytab entry keys
+    -C includes configuration data entries
+```
+```
+KRB5_KTNAME=/home/michaelg/.krb5/michaelg.keytab KRB5_TRACE=/dev/stdout klist -ektKC
+```
+```
+Keytab name: FILE:/home/michaelg/.krb5/michaelg.keytab
+KVNO Timestamp         Principal
+---- ----------------- --------------------------------------------------------
+   1 15/09/25 12:29:27 michaelg@MINDFRUIT.KRB (aes256-cts-hmac-sha384-192)  (0x403e118b1a74ac93931d4488261ce34443ee589275386a882fce8b61491b31ad)
+
+```
+---------------------------------------------8<----8<---------------------------------------------
+Source RPMs
+-----------
+Homepage https://koji.fedoraproject.org/koji/rpminfo?rpmID=42998713
+logs https://kojipkgs.fedoraproject.org//packages/krb5/1.21.3/6.fc42/data/logs/x86_64/
+build.log https://kojipkgs.fedoraproject.org//packages/krb5/1.21.3/6.fc42/data/logs/x86_64/build.log
+RPMs https://kojipkgs.fedoraproject.org//packages/krb5/1.21.3/6.fc42/x86_64/
+
+Advice given on https://web.libera.chat/?channels=#fedora-admin at 2025-09-17 at 09:43:09
+#kwizart said: fedpkg clone -a krb5 ; fedpkg switch-branch f42
+
+---------------------------------------------8<----8<---------------------------------------------
+Building krb5-1.21.3-final from source
+--------------------------------------
+autoreconf -fiv
+./configure --prefix=$HOME/alt --enable-shared --without-ldap --with-tls-impl=openssl --with-crypto-impl=openssl --without-selinux --with-pam --with-prng-alg=os --without-lmdb --without-krb5-config
+   this failed, so tried
+./configure --prefix=$HOME/alt
+   which worked, up to a point, as `make` then failed, so I tried
+./configure CFLAGS="-fPIC -fno-strict-aliasing -fstack-protector-all" --prefix=$HOME/alt
+
+
+
+------------------------------------------8<----8<------------------------------------------------
+SPNEGO headers
+--------------
+RFC 4559 https://www.rfc-editor.org/rfc/rfc4559.html
+We see the reply by the client to the `WWW-Authenticate: Negotiate` prompt is defined in section
+4.2. The payload of the `Authorization` header is the base-64 encoding of the InitialContextToken,
+as defined in RFC 2743 https://www.rfc-editor.org/rfc/rfc2743.
+
+Since I'm running into the GSS_S_DEFECTIVE_TOKEN error, this is on point:
+
+>  GSS_S_DEFECTIVE_TOKEN indicates that consistency checks performed on the
+>  input_token failed, preventing further processing from being performed based
+>  on that token.
+
+The base-64 decode implementation I found on SO was actually the problem:
+
+> / Referenced in https://stackoverflow.com/a/62128330, the commenter
+> / referenced a reply to the k4 topicbox on August 16th 2019 (subject
+> / "b64 encode") by Geo Carncross, which implements a base64 decoder.
+> / Used without permission, please shout if that's not OK.
+> .krb.b64d:{c:sum x="=";neg[c]_"c"$raze 256 vs'64 sv'0N 4#.Q.b6?x}
+
+I haven't looked into how its output differs from the Base-64 decode I found at
+https://web.mit.edu/freebsd/head/contrib/wpa/src/utils/base64.c
+
+The following Microsoft link contains useful information about the SPNEGO tokens
+https://learn.microsoft.com/en-us/previous-versions/ms995330(v=msdn.10)?redirectedfrom=MSDN#http-sso-2_topic1
+
+---------------------------------------------8<----8<---------------------------------------------
+Base-64 encoding
+----------------
+I see there's an MIT version https://web.mit.edu/freebsd/head/contrib/wpa/src/utils/base64.c
+
+The above MIT version is apparently fastest at encoding, but not decoding. See other at the
+comparison page: https://github.com/gaspardpetit/base64/
+
+---------------------------------------------8<----8<---------------------------------------------
+FIREFOX
+-------
+
+In firefox, using `about:config`, set this value:
+```
+network.negotiate-auth.trusted-uris	https://mindfruit.krb
+```
+
+### In the following fedorapeople.org link, at section 3.6.6
+Just seen this: https://jfearn.fedorapeople.org/fdocs/en-US/Fedora/20/html/Security_Guide/index.html 
+
+Using `sudo systemctl status kadmin.service`, we can see that the service is down. Also check `krb5kdc.service`.
+
+Had to start the `kadmin.service` and `krb5kdc.service` items with `sudo systemctl start ...`
+```
+sudo systemctl start krb5kdc.service
+sudo systemctl start kadmin.service
+```
+
+```
+michaelg@fedora:krb5$ sudo -i
+root@fedora:~# kadmin
+Authenticating as principal root/admin@MINDFRUIT.KRB with password.
+Password for root/admin@MINDFRUIT.KRB: 
+```
+```
+kadmin:  addprinc -randkey fedora/MINDFRUIT.KRB
+No policy specified for fedora/MINDFRUIT.KRB@MINDFRUIT.KRB; defaulting to no policy
+Principal "fedora/MINDFRUIT.KRB@MINDFRUIT.KRB" created.
+```
+```
+kadmin:  ktadd -k /etc/krb5.keytab fedora/MINDFRUIT.KRB
+Entry for principal fedora/MINDFRUIT.KRB with kvno 2, encryption type aes256-cts-hmac-sha384-192 added to keytab WRFILE:/etc/krb5.keytab.
+Entry for principal fedora/MINDFRUIT.KRB with kvno 2, encryption type aes128-cts-hmac-sha256-128 added to keytab WRFILE:/etc/krb5.keytab.
+Entry for principal fedora/MINDFRUIT.KRB with kvno 2, encryption type aes256-cts-hmac-sha1-96 added to keytab WRFILE:/etc/krb5.keytab.
+Entry for principal fedora/MINDFRUIT.KRB with kvno 2, encryption type aes128-cts-hmac-sha1-96 added to keytab WRFILE:/etc/krb5.keytab.
+Entry for principal fedora/MINDFRUIT.KRB with kvno 2, encryption type camellia256-cts-cmac added to keytab WRFILE:/etc/krb5.keytab.
+Entry for principal fedora/MINDFRUIT.KRB with kvno 2, encryption type camellia128-cts-cmac added to keytab WRFILE:/etc/krb5.keytab.
+Entry for principal fedora/MINDFRUIT.KRB with kvno 2, encryption type arcfour-hmac added to keytab WRFILE:/etc/krb5.keytab.
+```
+timestamp,sync,nsHttp:5,cache2:5,nsSocketTransport:5,nsHostResolver:5,EarlyHint:5,negotiateauth:5
+
+As `michaelg`, run
+```
+kinit
+```
+and enter the password; then
+```
+klist
+```
+and we see something like
+```
+Ticket cache: KCM:1000
+Default principal: michaelg/admin@MINDFRUIT.KRB
+
+Valid starting     Expires            Service principal
+10/09/25 22:37:31  11/09/25 22:37:03  krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB
+        renew until 10/09/25 22:37:31
+```
+
+Followed some steps from https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/5/html/deployment_guide/sso-config-firefox
+These included setting Firefox to set up logging:
+```
+```
+Added to that the KRB5_TRACE environment variable:
+```
+export KRB5_TRACE=krb5_trace.log
+```
+then
+```
+firefox
+```
+
+And lo and behold, in the `krb5_trace.log` file, we see
+```
+[51802] 1757540417.512353: ccselect module realm chose cache KCM:1000 with client principal michaelg/admin@MINDFRUIT.KRB for server principal HTTP/fedora@MINDFRUIT.KRB
+[51802] 1757540417.512354: Getting credentials michaelg/admin@MINDFRUIT.KRB -> HTTP/fedora@ using ccache KCM:1000
+[51802] 1757540417.512355: Retrieving michaelg/admin@MINDFRUIT.KRB -> krb5_ccache_conf_data/start_realm@X-CACHECONF: from KCM:1000 with result: -1765328243/Matching credential not found
+[51802] 1757540417.512356: Retrieving michaelg/admin@MINDFRUIT.KRB -> HTTP/fedora@ from KCM:1000 with result: -1765328243/Matching credential not found
+[51802] 1757540417.512357: Retrying michaelg/admin@MINDFRUIT.KRB -> HTTP/fedora@MINDFRUIT.KRB with result: -1765328243/Matching credential not found
+[51802] 1757540417.512358: Server has referral realm; starting with HTTP/fedora@MINDFRUIT.KRB
+[51802] 1757540417.512359: Retrieving michaelg/admin@MINDFRUIT.KRB -> krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB from KCM:1000 with result: 0/Success
+[51802] 1757540417.512360: Starting with TGT for client realm: michaelg/admin@MINDFRUIT.KRB -> krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB
+[51802] 1757540417.512361: Requesting tickets for HTTP/fedora@MINDFRUIT.KRB, referrals on
+[51802] 1757540417.512362: Generated subkey for TGS request: aes256-sha2/C1D3
+[51802] 1757540417.512363: etypes requested in TGS request: aes256-sha2, aes128-sha2, aes256-cts, aes128-cts, camellia256-cts, camellia128-cts
+[51802] 1757540417.512365: Encoding request body and padata into FAST request
+[51802] 1757540417.512366: Sending request (1148 bytes) to MINDFRUIT.KRB
+[51802] 1757540417.512367: Resolving hostname kerberos.mindfruit.krb
+[51802] 1757540417.512368: Sending initial UDP request to dgram 127.0.0.1:88
+[51802] 1757540417.512369: Received answer (444 bytes) from dgram 127.0.0.1:88
+[51802] 1757540417.512370: Sending DNS URI query for _kerberos.MINDFRUIT.KRB.
+[51802] 1757540417.512371: No URI records found
+[51802] 1757540417.512372: Sending DNS SRV query for _kerberos-master._udp.MINDFRUIT.KRB.
+[51802] 1757540417.512373: Sending DNS SRV query for _kerberos-master._tcp.MINDFRUIT.KRB.
+[51802] 1757540417.512374: No SRV records found
+[51802] 1757540417.512375: Response was not from primary KDC
+[51802] 1757540417.512376: Decoding FAST response
+[51802] 1757540417.512377: TGS request result: -1765328377/Server HTTP/fedora@MINDFRUIT.KRB not found in Kerberos database
+[51802] 1757540417.512378: Requesting tickets for HTTP/fedora@MINDFRUIT.KRB, referrals off
+[51802] 1757540417.512379: Generated subkey for TGS request: aes256-sha2/8797
+[51802] 1757540417.512380: etypes requested in TGS request: aes256-sha2, aes128-sha2, aes256-cts, aes128-cts, camellia256-cts, camellia128-cts
+[51802] 1757540417.512382: Encoding request body and padata into FAST request
+[51802] 1757540417.512383: Sending request (1148 bytes) to MINDFRUIT.KRB
+[51802] 1757540417.512384: Resolving hostname kerberos.mindfruit.krb
+[51802] 1757540417.512385: Sending initial UDP request to dgram 127.0.0.1:88
+[51802] 1757540417.512386: Received answer (444 bytes) from dgram 127.0.0.1:88
+[51802] 1757540417.512387: Sending DNS URI query for _kerberos.MINDFRUIT.KRB.
+[51802] 1757540417.512388: No URI records found
+[51802] 1757540417.512389: Sending DNS SRV query for _kerberos-master._udp.MINDFRUIT.KRB.
+[51802] 1757540417.512390: Sending DNS SRV query for _kerberos-master._tcp.MINDFRUIT.KRB.
+[51802] 1757540417.512391: No SRV records found
+[51802] 1757540417.512392: Response was not from primary KDC
+[51802] 1757540417.512393: Decoding FAST response
+[51802] 1757540417.512394: TGS request result: -1765328377/Server HTTP/fedora@MINDFRUIT.KRB not found in Kerberos database
+```
+
