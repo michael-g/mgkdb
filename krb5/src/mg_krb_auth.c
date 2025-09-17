@@ -85,8 +85,7 @@ unsigned char * base64_encode(const unsigned char *src, size_t len, size_t *out_
 			*pos++ = base64_table[(in[0] & 0x03) << 4];
 			*pos++ = '=';
 		} else {
-			*pos++ = base64_table[((in[0] & 0x03) << 4) |
-					      (in[1] >> 4)];
+			*pos++ = base64_table[((in[0] & 0x03) << 4) | (in[1] >> 4)];
 			*pos++ = base64_table[(in[1] & 0x0f) << 2];
 		}
 		*pos++ = '=';
@@ -260,7 +259,7 @@ void mg_print_gss_error(OM_uint32 major_code, OM_uint32 minor_code, const gss_OI
 				fprintf(stderr, "ERROR: while calling gss_display_status(,,GSS_C_MECH_CODE,,,): bad minor-status\n");
 			}
 			fprintf(stderr, "ERROR: %.*s, %.*s\n", (int)major_string.length, (char*)major_string.value, (int)minor_string.length, (char*)minor_string.value);
-			
+
 			gss_release_buffer(&err_status, &major_string);
 			gss_release_buffer(&err_status, &minor_string);
 		}
@@ -268,8 +267,27 @@ void mg_print_gss_error(OM_uint32 major_code, OM_uint32 minor_code, const gss_OI
 	}
 }
 
+#define CHK_RET_FLAGS(_VAL, _FLAG) if ((_VAL) & (_FLAG)) fprintf(stdout, "DEBUG: token includes the " #_FLAG " flag\n");
+static
+void mg_print_accept_context_flags(int flags)
+{
+	if (0 != flags) {
+		CHK_RET_FLAGS(flags, GSS_C_DELEG_FLAG);         // the initiator's credentials may be delegated
+		CHK_RET_FLAGS(flags, GSS_C_MUTUAL_FLAG);        // mutual authentication is available
+		CHK_RET_FLAGS(flags, GSS_C_REPLAY_FLAG);        // detection of repeated messages is available
+		CHK_RET_FLAGS(flags, GSS_C_SEQUENCE_FLAG);      // detection of out-of-sequence messages is available
+		CHK_RET_FLAGS(flags, GSS_C_CONF_FLAG);          // messages can be encrypted (confidentiality)
+		CHK_RET_FLAGS(flags, GSS_C_INTEG_FLAG);         // messages can be stamped with a MIC to ensure their validity
+		CHK_RET_FLAGS(flags, GSS_C_ANON_FLAG);          // the context initiator will be anonymous
+		CHK_RET_FLAGS(flags, GSS_C_PROT_READY_FLAG);    // indicates that validation indicated by the CONF and INTEG flags is now possible. We can now call gss_unwrap() or gss_verify_mic(); if false, data-reception may be incomplete
+		CHK_RET_FLAGS(flags, GSS_C_TRANS_FLAG);         // the context can be exported
+		CHK_RET_FLAGS(flags, GSS_C_DELEG_POLICY_FLAG);  // delegation is permissible only if permitted by KDC policy
+	}
+}
+#undef CHK_RET_FLAGS
+
 // Helper function that calls the gss_indicate_mechs function, and prints out
-// the results' textual representation. You'll want to ensure you see the 
+// the results' textual representation. You'll want to ensure you see the
 // Kerberos OID { 1 2 840 113554 1 2 2 }.
 __attribute__((unused))
 static
@@ -327,7 +345,7 @@ OM_uint32 mg_acquire_cred(const gss_name_t name, gss_cred_id_t output_cred_handl
 	         , NULL                  // actual mechs; we don't need to know so set this to NULL
 	         , time_rec              // number of seconds for which this credential is valid
 	         );
-	
+
 	if (GSS_ERROR(res)) {
 		mg_print_gss_error(res, minor_status, gss_mech_krb5);
 	}
@@ -338,120 +356,120 @@ OM_uint32 mg_acquire_cred(const gss_name_t name, gss_cred_id_t output_cred_handl
 	return res;
 }
 
-static
-OM_uint32 mg_accept_ctx(gss_buffer_t input_token, gss_ctx_id_t *context_handle)
-{
-	OM_uint32 minor_status;
-	OM_uint32 res;
+// static
+// OM_uint32 mg_accept_ctx(gss_buffer_t input_token, gss_ctx_id_t *context_handle)
+// {
+// 	OM_uint32 minor_status;
+// 	OM_uint32 res;
 
-	OM_uint32       ret_flags      = 0;
-	OM_uint32       time_rec       = 0;
-	gss_buffer_desc output_token   = {0};
-	gss_name_t      src_name       = NULL;
-	gss_OID         mech_typ       = {0};
+// 	OM_uint32       ret_flags      = 0;
+// 	OM_uint32       time_rec       = 0;
+// 	gss_buffer_desc output_token   = {0};
+// 	gss_name_t      src_name       = NULL;
+// 	gss_OID         mech_typ       = {0};
 
-	*context_handle = GSS_C_NO_CONTEXT;
+// 	*context_handle = GSS_C_NO_CONTEXT;
 
-	fprintf(stdout, "DEBUG: token byte-vec has length %zd and has bookendz ", input_token->length);
-	for (size_t i = 0 ; i < 5 ; i++) {
-		fprintf(stdout, "%02x", 0xFF & ((char*)input_token->value)[i]);
-	}
-	fprintf(stdout, "..");
-	for (size_t i = input_token->length - 10 ; i < input_token->length ; i++) {
-		fprintf(stdout, "%02x", 0xFF & ((char*)input_token->value)[i]);
-	}
-	fprintf(stdout, "\n");
+// 	fprintf(stdout, "DEBUG: token byte-vec has length %zd and has bookendz ", input_token->length);
+// 	for (size_t i = 0 ; i < 5 ; i++) {
+// 		fprintf(stdout, "%02x", 0xFF & ((char*)input_token->value)[i]);
+// 	}
+// 	fprintf(stdout, "..");
+// 	for (size_t i = input_token->length - 10 ; i < input_token->length ; i++) {
+// 		fprintf(stdout, "%02x", 0xFF & ((char*)input_token->value)[i]);
+// 	}
+// 	fprintf(stdout, "\n");
 
-	// The simplest choice is to pass GSS_C_NO_CREDENTIAL as the acceptor
-	// credential. In this case, clients may authenticate to any service
-	// principal in the default keytab (typically FILE:/etc/krb5.keytab, or the
-	// value of the KRB5_KTNAME environment variable). This is the recommended
-	// approach if the server application has no specific requirements to the
-	// contrary.
+// 	// The simplest choice is to pass GSS_C_NO_CREDENTIAL as the acceptor
+// 	// credential. In this case, clients may authenticate to any service
+// 	// principal in the default keytab (typically FILE:/etc/krb5.keytab, or the
+// 	// value of the KRB5_KTNAME environment variable). This is the recommended
+// 	// approach if the server application has no specific requirements to the
+// 	// contrary.
 
-	// NB if res is GSS_S_CONTINUE_NEEDED we need to invoke again
-	res = gss_accept_sec_context(
-	         &minor_status
-	       , context_handle            // set above to GSS_C_NO_CONTEXT
-	       , GSS_C_NO_CREDENTIAL       // _cred_handle_g, initialised by gss_acquire_cred?
-	       , input_token
-	       , GSS_C_NO_CHANNEL_BINDINGS // the null value for gss_channel_bindings_t
-	       , &src_name                 // name of the initiating principal
-	       , &mech_typ                 // security-mechanism to use; set NULL if we don't care
-	       , &output_token             //
-	       , &ret_flags                // bitwise collection indicating e.g. GSS_C_INTEG_FLAG
-	       , &time_rec                 // number of seconds this will remain vaild
-	       , NULL                      // gss_cred_id_t delegated credentials handle
-	       );
+// 	// NB if res is GSS_S_CONTINUE_NEEDED we need to invoke again
+// 	res = gss_accept_sec_context(
+// 	         &minor_status
+// 	       , context_handle            // set above to GSS_C_NO_CONTEXT
+// 	       , GSS_C_NO_CREDENTIAL       // _cred_handle_g, initialised by gss_acquire_cred?
+// 	       , input_token
+// 	       , GSS_C_NO_CHANNEL_BINDINGS // the null value for gss_channel_bindings_t
+// 	       , &src_name                 // name of the initiating principal
+// 	       , &mech_typ                 // security-mechanism to use; set NULL if we don't care
+// 	       , &output_token             //
+// 	       , &ret_flags                // bitwise collection indicating e.g. GSS_C_INTEG_FLAG
+// 	       , &time_rec                 // number of seconds this will remain vaild
+// 	       , NULL                      // gss_cred_id_t delegated credentials handle
+// 	       );
 
-	if (GSS_SUPPLEMENTARY_INFO(res)) {
-		mg_print_gss_error(res, minor_status, GSS_C_NULL_OID);
-		if (GSS_S_CONTINUE_NEEDED == res) {
-			// TODO, output_token.length will be > 0
-		}
-	}
+// 	if (GSS_SUPPLEMENTARY_INFO(res)) {
+// 		mg_print_gss_error(res, minor_status, GSS_C_NULL_OID);
+// 		if (GSS_S_CONTINUE_NEEDED == res) {
+// 			// TODO, output_token.length will be > 0
+// 		}
+// 	}
 
-	if (GSS_ERROR(res)) {
-		mg_print_gss_error(res, minor_status, GSS_C_NULL_OID);
-		mg_print_gss_error(res, minor_status, gss_mech_krb5);
-	}
-	else {
-		fprintf(stdout, " INFO: gss_accept_sec_context success; context is valid for %u seconds\n", time_rec);
+// 	if (GSS_ERROR(res)) {
+// 		mg_print_gss_error(res, minor_status, GSS_C_NULL_OID);
+// 		mg_print_gss_error(res, minor_status, gss_mech_krb5);
+// 	}
+// 	else {
+// 		fprintf(stdout, " INFO: gss_accept_sec_context success; context is valid for %u seconds\n", time_rec);
 
-		if (NULL != src_name) {
-			OM_uint32 tmp_status;
-			gss_buffer_desc name_buf = {0};
-			gss_OID name_typ = NULL;
-			OM_uint32 err = gss_display_name(&tmp_status, src_name, &name_buf, &name_typ);
-			if (GSS_ERROR(err)) {
-				fprintf(stderr, "ERROR: failed in gss_display_name while retrieving Client name\n");
-				mg_print_gss_error(res, minor_status, GSS_C_NULL_OID);
-			}
-			else {
-				fprintf(stdout, " INFO: Client is %.*s\n", (int)name_buf.length, (char*)name_buf.value);
-			}
-		}
-		else {
-			fprintf(stdout, " WARN: no source name available from Client token\n");
-		}
-		if (0 != ret_flags) {
-#define CHK_RET_FLAGS(_VAL, _FLAG) if ((_VAL) & (_FLAG)) fprintf(stdout, "DEBUG: token includes the " #_FLAG " flag\n");
-			CHK_RET_FLAGS(ret_flags, GSS_C_DELEG_FLAG);         // the initiator's credentials may be delegated
-			CHK_RET_FLAGS(ret_flags, GSS_C_MUTUAL_FLAG);        // mutual authentication is available
-			CHK_RET_FLAGS(ret_flags, GSS_C_REPLAY_FLAG);        // detection of repeated messages is available
-			CHK_RET_FLAGS(ret_flags, GSS_C_SEQUENCE_FLAG);      // detection of out-of-sequence messages is available
-			CHK_RET_FLAGS(ret_flags, GSS_C_CONF_FLAG);          // messages can be encrypted (confidentiality)
-			CHK_RET_FLAGS(ret_flags, GSS_C_INTEG_FLAG);         // messages can be stamped with a MIC to ensure their validity
-			CHK_RET_FLAGS(ret_flags, GSS_C_ANON_FLAG);          // the context initiator will be anonymous
-			CHK_RET_FLAGS(ret_flags, GSS_C_PROT_READY_FLAG);    // indicates that validation indicated by the CONF and INTEG flags is now possible. We can now call gss_unwrap() or gss_verify_mic(); if false, data-reception may be incomplete
-			CHK_RET_FLAGS(ret_flags, GSS_C_TRANS_FLAG);         // the context can be exported
-			CHK_RET_FLAGS(ret_flags, GSS_C_DELEG_POLICY_FLAG);  // delegation is permissible only if permitted by KDC policy
-#undef CHK_RET_FLAGS
+// 		if (NULL != src_name) {
+// 			OM_uint32 tmp_status;
+// 			gss_buffer_desc name_buf = {0};
+// 			gss_OID name_typ = NULL;
+// 			OM_uint32 err = gss_display_name(&tmp_status, src_name, &name_buf, &name_typ);
+// 			if (GSS_ERROR(err)) {
+// 				fprintf(stderr, "ERROR: failed in gss_display_name while retrieving Client name\n");
+// 				mg_print_gss_error(res, minor_status, GSS_C_NULL_OID);
+// 			}
+// 			else {
+// 				fprintf(stdout, " INFO: Client is %.*s\n", (int)name_buf.length, (char*)name_buf.value);
+// 			}
+// 		}
+// 		else {
+// 			fprintf(stdout, " WARN: no source name available from Client token\n");
+// 		}
+// 		if (0 != ret_flags) {
+// #define CHK_RET_FLAGS(_VAL, _FLAG) if ((_VAL) & (_FLAG)) fprintf(stdout, "DEBUG: token includes the " #_FLAG " flag\n");
+// 			CHK_RET_FLAGS(ret_flags, GSS_C_DELEG_FLAG);         // the initiator's credentials may be delegated
+// 			CHK_RET_FLAGS(ret_flags, GSS_C_MUTUAL_FLAG);        // mutual authentication is available
+// 			CHK_RET_FLAGS(ret_flags, GSS_C_REPLAY_FLAG);        // detection of repeated messages is available
+// 			CHK_RET_FLAGS(ret_flags, GSS_C_SEQUENCE_FLAG);      // detection of out-of-sequence messages is available
+// 			CHK_RET_FLAGS(ret_flags, GSS_C_CONF_FLAG);          // messages can be encrypted (confidentiality)
+// 			CHK_RET_FLAGS(ret_flags, GSS_C_INTEG_FLAG);         // messages can be stamped with a MIC to ensure their validity
+// 			CHK_RET_FLAGS(ret_flags, GSS_C_ANON_FLAG);          // the context initiator will be anonymous
+// 			CHK_RET_FLAGS(ret_flags, GSS_C_PROT_READY_FLAG);    // indicates that validation indicated by the CONF and INTEG flags is now possible. We can now call gss_unwrap() or gss_verify_mic(); if false, data-reception may be incomplete
+// 			CHK_RET_FLAGS(ret_flags, GSS_C_TRANS_FLAG);         // the context can be exported
+// 			CHK_RET_FLAGS(ret_flags, GSS_C_DELEG_POLICY_FLAG);  // delegation is permissible only if permitted by KDC policy
+// #undef CHK_RET_FLAGS
 
-			if (res & GSS_C_PROT_READY_FLAG) {
-				if (res & (GSS_C_CONF_FLAG)) {
-					OM_uint32 unwrap_status;
-					int conf_state;
-					gss_qop_t qop_state;
-					OM_uint32 unwrap_err = gss_unwrap(&unwrap_status, *context_handle, input_token, &output_token, &conf_state, &qop_state);
-					if (GSS_ERROR(unwrap_err)) {
-						mg_print_gss_error(unwrap_err, unwrap_status, GSS_C_NULL_OID);
-					}
-					else {
-						fprintf(stdout, "DEBUG: gss_unwrap was successful\n");
-					}
-				}
-				else if (res & GSS_C_INTEG_FLAG) {
-					// TODO gss_verify_mic
-				}
-			}
-			else {
-				fprintf(stdout, "DEBUG: PROT_READY not set, not validating\n");
-			}
-		}
-	}
-	return res;
-}
+// 			if (res & GSS_C_PROT_READY_FLAG) {
+// 				if (res & (GSS_C_CONF_FLAG)) {
+// 					OM_uint32 unwrap_status;
+// 					int conf_state;
+// 					gss_qop_t qop_state;
+// 					OM_uint32 unwrap_err = gss_unwrap(&unwrap_status, *context_handle, input_token, &output_token, &conf_state, &qop_state);
+// 					if (GSS_ERROR(unwrap_err)) {
+// 						mg_print_gss_error(unwrap_err, unwrap_status, GSS_C_NULL_OID);
+// 					}
+// 					else {
+// 						fprintf(stdout, "DEBUG: gss_unwrap was successful\n");
+// 					}
+// 				}
+// 				else if (res & GSS_C_INTEG_FLAG) {
+// 					// TODO gss_verify_mic
+// 				}
+// 			}
+// 			else {
+// 				fprintf(stdout, "DEBUG: PROT_READY not set, not validating\n");
+// 			}
+// 		}
+// 	}
+// 	return res;
+// }
 
 K mg_print_mechs(K dummy)
 {
@@ -460,96 +478,96 @@ K mg_print_mechs(K dummy)
 }
 
 //K mg_krb5_auth(K b64_tkn)
-K mg_krb5_auth(K b64_tkn)
-{
-	// if (KG != b64_tkn->t) {
-	if (KC != b64_tkn->t) {
-		//return krr("expect token as byte-vector");
-		return krr("expect token as char-vector");
-	}
+// K mg_krb5_auth(K b64_tkn)
+// {
+// 	// if (KG != b64_tkn->t) {
+// 	if (KC != b64_tkn->t) {
+// 		//return krr("expect token as byte-vector");
+// 		return krr("expect token as char-vector");
+// 	}
 
-	OM_uint32 res;
-	gss_ctx_id_t context_handle;
+// 	OM_uint32 res;
+// 	gss_ctx_id_t context_handle;
 
-	size_t out_len = 0;
-	unsigned char *b64 = base64_decode(b64_tkn->G0, b64_tkn->n, &out_len);
-	if (NULL == b64) {
-		return krr("ERROR: failed in base64_decode\n");
-	}
+// 	size_t out_len = 0;
+// 	unsigned char *b64 = base64_decode(b64_tkn->G0, b64_tkn->n, &out_len);
+// 	if (NULL == b64) {
+// 		return krr("ERROR: failed in base64_decode\n");
+// 	}
 
-	gss_buffer_desc input_token = {
-		.length = out_len,
-		.value = b64,
-	};
+// 	gss_buffer_desc input_token = {
+// 		.length = out_len,
+// 		.value = b64,
+// 	};
 
-	res = mg_accept_ctx(&input_token, &context_handle);
+// 	res = mg_accept_ctx(&input_token, &context_handle);
 
-	free(b64);
+// 	free(b64);
 
-	if (GSS_ERROR(res)) {
-		return krr("failed to authenticate token");
-	}
+// 	if (GSS_ERROR(res)) {
+// 		return krr("failed to authenticate token");
+// 	}
 
-	return kb(1);
-}
+// 	return kb(1);
+// }
 
 
-__attribute__((unused))
-static
-K mg_krb5_init(K principal)
-{
-	if (KC != principal->t) {
-		return krr("expected type 10h for principal");
-	}
+// __attribute__((unused))
+// static
+// K mg_krb5_init(K principal)
+// {
+// 	if (KC != principal->t) {
+// 		return krr("expected type 10h for principal");
+// 	}
 
-	OM_uint32 res, minor_status;
-	gss_name_t output_name;
-	gss_buffer_desc input_name = {
-		.length = (size_t)principal->n,
-		.value = (void*)principal->G0,
-	};
+// 	OM_uint32 res, minor_status;
+// 	gss_name_t output_name;
+// 	gss_buffer_desc input_name = {
+// 		.length = (size_t)principal->n,
+// 		.value = (void*)principal->G0,
+// 	};
 
-	fprintf(stdout, "DEBUG: resolving principal %.*s\n", (int)input_name.length, (char*)input_name.value);
-	
-	res = gss_import_name(
-	           &minor_status
-	         , &input_name
-	         , GSS_KRB5_NT_PRINCIPAL_NAME
-	         , &output_name
-	         );
+// 	fprintf(stdout, "DEBUG: resolving principal %.*s\n", (int)input_name.length, (char*)input_name.value);
 
-	if (GSS_ERROR(res)) {
-		mg_print_gss_error(res, minor_status, GSS_C_NULL_OID);
-		return krr("failed to import principal OID name");
-	}
+// 	res = gss_import_name(
+// 	           &minor_status
+// 	         , &input_name
+// 	         , GSS_KRB5_NT_PRINCIPAL_NAME
+// 	         , &output_name
+// 	         );
 
-	// OM_uint32 time_rec = 0;
+// 	if (GSS_ERROR(res)) {
+// 		mg_print_gss_error(res, minor_status, GSS_C_NULL_OID);
+// 		return krr("failed to import principal OID name");
+// 	}
 
-	res = gss_acquire_cred(
-	           &minor_status
-	         , output_name
-	         , GSS_C_INDEFINITE      // time_req; how long we want this to last for
-	         , GSS_C_NULL_OID_SET    // gss_mech_set_krb5     // desired_mechs; can supply GSS_C_NO_OID_SET but it seems to access the keytab twice
-	         , GSS_C_ACCEPT          // gss_cred_usage_t (C.f. GSS_C_INITIATE and GSS_C_BOTH)
-	         , &_cred_handle_g
-	         , NULL                  // actual mechs; we don't need to know so set this to NULL
-	         , NULL                  // number of seconds for which this credential is valid
-	         );
-	if (GSS_SUPPLEMENTARY_INFO(res)) {
-		fprintf(stdout, " INFO: extra info for gss_acquire_cred: \n");
-		mg_print_gss_error(res, minor_status, 0);
-	}
-	
-	if (GSS_ERROR(res)) {
-		mg_print_gss_error(res, minor_status, gss_mech_krb5);
-		return krr("failed to acquire credentials");
-	}
+// 	// OM_uint32 time_rec = 0;
 
-	fprintf(stdout, "DEBUG: gss_acquire_creds complete\n");
+// 	res = gss_acquire_cred(
+// 	           &minor_status
+// 	         , output_name
+// 	         , GSS_C_INDEFINITE      // time_req; how long we want this to last for
+// 	         , GSS_C_NULL_OID_SET    // gss_mech_set_krb5     // desired_mechs; can supply GSS_C_NO_OID_SET but it seems to access the keytab twice
+// 	         , GSS_C_ACCEPT          // gss_cred_usage_t (C.f. GSS_C_INITIATE and GSS_C_BOTH)
+// 	         , &_cred_handle_g
+// 	         , NULL                  // actual mechs; we don't need to know so set this to NULL
+// 	         , NULL                  // number of seconds for which this credential is valid
+// 	         );
+// 	if (GSS_SUPPLEMENTARY_INFO(res)) {
+// 		fprintf(stdout, " INFO: extra info for gss_acquire_cred: \n");
+// 		mg_print_gss_error(res, minor_status, 0);
+// 	}
 
-	return kb(1);
-	
-}
+// 	if (GSS_ERROR(res)) {
+// 		mg_print_gss_error(res, minor_status, gss_mech_krb5);
+// 		return krr("failed to acquire credentials");
+// 	}
+
+// 	fprintf(stdout, "DEBUG: gss_acquire_creds complete\n");
+
+// 	return kb(1);
+
+// }
 
 K mg_accept_sec_context(K b64_tkn, K ctx_ptr)
 {
@@ -632,9 +650,9 @@ K mg_accept_sec_context(K b64_tkn, K ctx_ptr)
 		return krr("failed to decode Client token");
 	}
 
-	K k_src_name = (K)NULL;
+	K k_src_name = kpn("", 0);
 
-	fprintf(stdout, "TRACE: gss_accept_sec_context success; context is valid for %u seconds\n", time_rec);
+	fprintf(stdout, "TRACE: gss_accept_sec_context success; context is valid for %u seconds, handle is %p\n", time_rec, (void*)context_handle);
 
 	{
 		gss_buffer_desc buf = {0};
@@ -660,6 +678,7 @@ K mg_accept_sec_context(K b64_tkn, K ctx_ptr)
 		}
 		else {
 			fprintf(stdout, "DEBUG: Client is %.*s\n", (int)name_buf.length, (char*)name_buf.value);
+			r0(k_src_name);
 			k_src_name = kpn((S)name_buf.value, (J)name_buf.length);
 		}
 	}
@@ -668,18 +687,8 @@ K mg_accept_sec_context(K b64_tkn, K ctx_ptr)
 	}
 
 	if (0 != ret_flags) {
-#define CHK_RET_FLAGS(_VAL, _FLAG) if ((_VAL) & (_FLAG)) fprintf(stdout, "DEBUG: token includes the " #_FLAG " flag\n");
-		CHK_RET_FLAGS(ret_flags, GSS_C_DELEG_FLAG);         // the initiator's credentials may be delegated
-		CHK_RET_FLAGS(ret_flags, GSS_C_MUTUAL_FLAG);        // mutual authentication is available
-		CHK_RET_FLAGS(ret_flags, GSS_C_REPLAY_FLAG);        // detection of repeated messages is available
-		CHK_RET_FLAGS(ret_flags, GSS_C_SEQUENCE_FLAG);      // detection of out-of-sequence messages is available
-		CHK_RET_FLAGS(ret_flags, GSS_C_CONF_FLAG);          // messages can be encrypted (confidentiality)
-		CHK_RET_FLAGS(ret_flags, GSS_C_INTEG_FLAG);         // messages can be stamped with a MIC to ensure their validity
-		CHK_RET_FLAGS(ret_flags, GSS_C_ANON_FLAG);          // the context initiator will be anonymous
-		CHK_RET_FLAGS(ret_flags, GSS_C_PROT_READY_FLAG);    // indicates that validation indicated by the CONF and INTEG flags is now possible. We can now call gss_unwrap() or gss_verify_mic(); if false, data-reception may be incomplete
-		CHK_RET_FLAGS(ret_flags, GSS_C_TRANS_FLAG);         // the context can be exported
-		CHK_RET_FLAGS(ret_flags, GSS_C_DELEG_POLICY_FLAG);  // delegation is permissible only if permitted by KDC policy
-#undef CHK_RET_FLAGS
+
+		mg_print_accept_context_flags(ret_flags);
 
 		if (res & GSS_C_PROT_READY_FLAG) {
 			if (res & (GSS_C_CONF_FLAG)) {
@@ -706,18 +715,18 @@ K mg_accept_sec_context(K b64_tkn, K ctx_ptr)
 	K k_tgt_name = ktn(KC, 0);
 	{
 		gss_name_t tgt_name;
-		OM_uint32 lifetime_rec;
+		//OM_uint32 lifetime_rec;
 
 		res = gss_inquire_context(
 		            &minor_status
 		          , context_handle
-		          , &src_name
-		          , &tgt_name
-		          , &lifetime_rec
-		          , NULL
-		          , NULL
-		          , NULL
-		          , NULL);
+		          , NULL            // source_name
+		          , &tgt_name       // target_name
+		          , NULL            // lifetime_rec
+		          , NULL            // mech_type
+		          , NULL            // ctx_flags
+		          , NULL            // locally_initiated
+		          , NULL);          // open
 		if (GSS_ERROR(res)) {
 			mg_print_gss_error(res, minor_status, GSS_C_NULL_OID);
 		}
@@ -741,7 +750,6 @@ K mg_accept_sec_context(K b64_tkn, K ctx_ptr)
 	r0(ctx_ptr);
 
 	ctx_ptr = kj((J)(uintptr_t)context_handle);
-	fprintf(stdout, "DEBUG: comprare ctx_ptr->j %llx, context_handle %p\n", ctx_ptr->j, (void*)context_handle);
 	// NB the validity of the context will be bounded by the validity of the applicant's ticket
 	K validity = ki((I)time_rec);
 
