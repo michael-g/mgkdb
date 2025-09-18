@@ -755,4 +755,133 @@ K mg_accept_sec_context(K b64_tkn, K ctx_ptr)
 
 	K vals = knk(5, ki(1), k_src_name, k_tgt_name, ctx_ptr, validity);
 	return vals;
+} // end mg_accept_sec_context
+
+K mg_init_sec_context(K k_src_name, K k_tgt_name, K k_ctx_ptr)
+{
+	if (KC != k_src_name->t) {
+		return krr("Bad k_src_name.type");
+	}
+	if (KC != k_tgt_name->t) {
+		return krr("Bad k_tgt_name.type");
+	}
+	if (-KJ != k_ctx_ptr->t) {
+		return krr("Bad k_ctx_ptr.type");
+	}
+	if ((J)nj == k_ctx_ptr->j) {
+		k_ctx_ptr->j = (J)(uintptr_t)GSS_C_NO_CONTEXT;
+	}
+
+	OM_uint32 res, minor_status;
+
+	gss_cred_id_t cred_handle = GSS_C_NO_CREDENTIAL;
+
+	//-----------------------------------
+	{
+		gss_name_t src_name;
+		gss_buffer_desc buf = {
+			.length = (size_t)k_src_name->n,
+			.value = (void*)k_src_name->G0,
+		};
+
+		res = gss_import_name(&minor_status, &buf, GSS_KRB5_NT_PRINCIPAL_NAME, &src_name);
+
+		if (GSS_ERROR(res)) {
+			mg_print_gss_error(res, minor_status, GSS_C_NULL_OID);
+			return krr("failed to import tgt_name");
+		}
+
+		res = gss_acquire_cred(
+		           &minor_status
+		         , src_name
+		         , GSS_C_INDEFINITE      // time_req; how long we want this to last for
+		         , gss_mech_set_krb5     // GSS_C_NULL_OID_SET    // gss_mech_set_krb5     // desired_mechs; can supply GSS_C_NO_OID_SET but it seems to access the keytab twice
+		         , GSS_C_INITIATE        // gss_cred_usage_t (C.f. GSS_C_INITIATE and GSS_C_BOTH)
+		         , &cred_handle
+		         , NULL                  // actual mechs; we don't need to know so set this to NULL
+		         , NULL                  // number of seconds for which this credential is valid
+		         );
+
+		if (GSS_SUPPLEMENTARY_INFO(res)) {
+			fprintf(stdout, " INFO: extra info for gss_acquire_cred: \n");
+			mg_print_gss_error(res, minor_status, 0);
+		}
+
+		if (GSS_ERROR(res)) {
+			mg_print_gss_error(res, minor_status, gss_mech_krb5);
+			return krr("failed to acquire credentials");
+		}
+	}
+
+	if (GSS_C_NO_CREDENTIAL == cred_handle) {
+		return krr("failed to acquire credentials for source principal");
+	}
+	fprintf(stdout, "DEBUG: acquired credentials for %.*s\n", (int)k_src_name->n, (char*)k_src_name->G0);
+
+	//-----------------------------------
+
+	gss_name_t tgt_name = GSS_C_NO_NAME;
+	{
+		gss_buffer_desc buf = {
+			.length = (size_t)k_tgt_name->n,
+			.value = (void*)k_tgt_name->G0,
+		};
+
+		fprintf(stdout, "DEBUG: resolving target name %.*s to internal format\n", (int)buf.length, (char*)buf.value);
+
+		res = gss_import_name(&minor_status, &buf, GSS_KRB5_NT_PRINCIPAL_NAME, &tgt_name);
+
+		if (GSS_ERROR(res)) {
+			mg_print_gss_error(res, minor_status, GSS_C_NULL_OID);
+			return krr("failed to import tgt_name");
+		}
+	}
+
+	if (GSS_C_NO_NAME == tgt_name) {
+		return krr("failed to resolve target service\n");
+	}
+	fprintf(stdout, "DEBUG: resolved target service %.*s\n", (int)k_tgt_name->n, (char*)k_tgt_name->G0);
+
+	//-----------------------------------
+
+	gss_ctx_id_t    context_handle = (void*)(uintptr_t)k_ctx_ptr->j;
+	OM_uint32       req_flags = GSS_C_CONF_FLAG | GSS_C_INTEG_FLAG | GSS_C_REPLAY_FLAG | GSS_C_SEQUENCE_FLAG;
+	gss_buffer_desc output_token = {0};
+	OM_uint32       ret_flags;
+	OM_uint32       time_rec;
+
+	fprintf(stdout, "DEBUG: beginning init_sec_context\n");
+	res = gss_init_sec_context(
+	            &minor_status
+	          , cred_handle                         // use the entirety of the keytab with GSS_C_NO_CREDENTIAL
+	          , &context_handle                     // context_handle
+	          , tgt_name                            // target_name
+	          , GSS_C_NULL_OID                      // mech-type or GSS_C_NULL_OID
+	          , req_flags                           // request flags
+	          , GSS_C_INDEFINITE                    // time request
+	          , GSS_C_NO_CHANNEL_BINDINGS           // input_chan_bindings
+	          , GSS_C_NO_BUFFER                     // input_token
+	          , NULL                                // mech-type used (obvs krb5)
+	          , &output_token                       // output_token structure
+	          , &ret_flags                          // flags applied to the request
+	          , &time_rec                           // validity time
+	          );
+
+	if (GSS_ERROR(res)) {
+		mg_print_gss_error(res, minor_status, GSS_C_NULL_OID);
+		return krr("failed in gss_init_sec_context");
+	}
+	fprintf(stdout, "DEBUG: context initialised successfully\n");
+
+	size_t b64_len = 0;
+	unsigned char *b64 = base64_encode((unsigned char*)output_token.value, output_token.length, &b64_len);
+	if (NULL == b64 || 0 == b64_len) {
+		free(b64);
+		return krr("failed in base64_encode");
+	}
+	K k_token = kpn((S)b64, b64_len);
+	free(b64);
+
+	K vals = knk(2, ki(1), k_token);
+	return vals;
 }
