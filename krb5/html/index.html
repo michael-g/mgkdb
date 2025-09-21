@@ -27,7 +27,7 @@ window.mg_init = function() {
     onConnected: MgKrb5.receiver.kdbConnected,
     onDisconnected: MgKrb5.receiver.kdbDisconnected,
   }
-  MgKrb5.conn = new MgKdb.Endpoint('ws://localhost:30097', listener)
+  MgKrb5.conn = new MgKdb.Endpoint(`ws://${window.location.hostname}:30097`, listener)
 }
 
     </script>

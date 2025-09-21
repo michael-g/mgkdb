@@ -1,3 +1,4 @@
+------------------------------------------8<----8<------------------------------------------------
 Following https://fedoraproject.org/wiki/Kerberos_KDC_Quickstart_Guide
 
 vim -O /etc/krb5.conf /var/kerberos/krb5kdc/kdc.conf
@@ -24,7 +25,7 @@ Where `hostname -A` returns
 fedora fedora fedora
 ```
 
-This this is redundant:
+I think this this is redundant:
 I create principal `admin/fedora` for `kadmin` (even though it's local):
 ```
 root@fedora:/var/kerberos/krb5kdc# kadmin.local -r MINDFRUIT.KRB -q "addprinc admin/fedora"
@@ -524,3 +525,1291 @@ And lo and behold, in the `krb5_trace.log` file, we see
 [51802] 1757540417.512394: TGS request result: -1765328377/Server HTTP/fedora@MINDFRUIT.KRB not found in Kerberos database
 ```
 
+---------------------------------------------8<----8<---------------------------------------------
+Capturing Kerberos Traffic From Firefox
+---------------------------------------
+
+Running Firefox as follows:
+```
+KRB5_TRACE=firefox_krb5.log_$(date +%Y%m%d) KRB5_CLIENT_KTNAME=FILE:$HOME/.krb5/michaelg.keytab KRB5CCNAME=FILE:$HOME/.krb5/michaelg.ccache firefox
+```
+
+I'm running Wireshark as `root`.
+
+When trying to decrypt the krb5 traffic, I was unable to get far because I couldn't find the server's
+keytab to add to Wireshark's preferences (protocols->KRB5). This web-page https://wiki.archlinux.org/title/Kerberos
+suggests that when using `kadmin.local` to add principals (via `addprinc`), you then add the KDC principal
+to the server's keytab:
+```
+ktadd host/kerberos.example.com
+```
+So I did this, under `strace` and captured the output, as:
+```
+root# strace -e file kadmin.local -r MINDFRUIT.KRB
+```
+```
+ktadd -glob *
+```
+Upon exiting, I then checked the `/etc/krb5.keytab` file with `klist`, which dumped a ton of stuff:
+```
+root@fedora:~# klist -k /etc/krb5.keytab -tKC
+Keytab name: FILE:/etc/krb5.keytab
+KVNO Timestamp         Principal
+---- ----------------- --------------------------------------------------------
+   2 10/09/25 22:14:38 fedora/MINDFRUIT.KRB@MINDFRUIT.KRB (0x6a2f8c4f561b8f5fe4aefbe58a84aeeebb395113eb23e31c04796caad9593acb)
+   2 10/09/25 22:14:38 fedora/MINDFRUIT.KRB@MINDFRUIT.KRB (0xddea83ad07aaf957ae6dd5e2243b5402)
+   2 10/09/25 22:14:38 fedora/MINDFRUIT.KRB@MINDFRUIT.KRB (0x5aae73b40f41a17bca900c42e8da29571b249caa0442212ff267813b61cdd78c)
+   2 10/09/25 22:14:38 fedora/MINDFRUIT.KRB@MINDFRUIT.KRB (0x47ca94c8bca885b7c2873d72dd1c17e2)
+   2 10/09/25 22:14:38 fedora/MINDFRUIT.KRB@MINDFRUIT.KRB (0x1ba8a7d8e6a32c876b1d63417325421073a2dbefb1522df7a988d9eedfd04aa3)
+   2 10/09/25 22:14:38 fedora/MINDFRUIT.KRB@MINDFRUIT.KRB (0x8e98174068d51370b42f319e46a36d7c)
+   2 10/09/25 22:14:38 fedora/MINDFRUIT.KRB@MINDFRUIT.KRB (0xaaa4224b4ed099121d4eb64dbe00f4df)
+   3 19/09/25 11:55:40 HTTP/fedora@MINDFRUIT.KRB (0x11f76ce2962580f7cf45a58953474ee48a6d6e5f435f32869e91644ad4a6f4ec)
+   3 19/09/25 11:55:40 HTTP/fedora@MINDFRUIT.KRB (0xc6828c1ccc8ffa91b159cac8534cb933)
+   3 19/09/25 11:55:40 HTTP/fedora@MINDFRUIT.KRB (0xd329722cc3ca90aaab71240a73bfa1464d1af69f7b9d41ee157be4040276c294)
+   3 19/09/25 11:55:40 HTTP/fedora@MINDFRUIT.KRB (0x77b3871010fa3dd70a80d57397f171a2)
+   3 19/09/25 11:55:40 HTTP/fedora@MINDFRUIT.KRB (0x611369d96cc0b4f8305119b1948e4778982102ea6cab9da0f67e5d12a9cbda5e)
+   3 19/09/25 11:55:40 HTTP/fedora@MINDFRUIT.KRB (0x2e101211a13f1b604cfcf46e5d3550ae)
+   3 19/09/25 11:55:40 HTTP/fedora@MINDFRUIT.KRB (0x2fc0e8ffe9a29d2c0b228e4678e4d26e)
+   2 19/09/25 11:55:40 K/M@MINDFRUIT.KRB (0x4ce507145e7cc04a046b8c394d05c5b2aeedbd44dc414d851f627111f08e2030)
+   2 19/09/25 11:55:40 K/M@MINDFRUIT.KRB (0xa9dabb55145d9d706e5642d2ec9b0b40)
+   2 19/09/25 11:55:40 K/M@MINDFRUIT.KRB (0x06251a90ee47ffa2182c1356a39dfbf4f8280b9b5d2aa9ffb7a6ff6905650475)
+   2 19/09/25 11:55:40 K/M@MINDFRUIT.KRB (0x83f4cdabfdbbbe97f125fe249406e919)
+   2 19/09/25 11:55:40 K/M@MINDFRUIT.KRB (0x1b263da4757d77a05a1e3d32a539b4b0122599a835e6a8eae4f2b6c2f79a1457)
+   2 19/09/25 11:55:40 K/M@MINDFRUIT.KRB (0x8932f7fc264b504e5c04c280430dfb39)
+   2 19/09/25 11:55:40 K/M@MINDFRUIT.KRB (0x762b87b95fbdf59c71e4c388f098c406)
+   2 19/09/25 11:55:40 admin/fedora@MINDFRUIT.KRB (0xbbaefde9abb3ff4c730acfbe6cdb08dce96693fbc34bad9205f07dad866c541b)
+   2 19/09/25 11:55:40 admin/fedora@MINDFRUIT.KRB (0x2cb118325f255e81af69e8e9244b7af1)
+   2 19/09/25 11:55:40 admin/fedora@MINDFRUIT.KRB (0x7b945363f46e8005625517903879f2505abe452d3285898bc3e7f4f9f9831dab)
+   2 19/09/25 11:55:40 admin/fedora@MINDFRUIT.KRB (0xa4ae5b886210c41329d37859f42507ec)
+   2 19/09/25 11:55:40 admin/fedora@MINDFRUIT.KRB (0xe13da2488f6d9232996124edba24c8b30cf56b3ea51764b6c59131a748cec483)
+   2 19/09/25 11:55:40 admin/fedora@MINDFRUIT.KRB (0xcee7cac9f43ccd5a757b1280fb197f0c)
+   2 19/09/25 11:55:40 admin/fedora@MINDFRUIT.KRB (0x22875b897fbd2c00b49c12ad1d4f32bc)
+   2 19/09/25 11:55:40 kadmin/admin@MINDFRUIT.KRB (0x163395d09d20696194bdeebff6c632eee26f29c46e9fcd485855b4ad5daac19a)
+   2 19/09/25 11:55:40 kadmin/admin@MINDFRUIT.KRB (0xd8bf3979083154f036cf12387c8d6c0a)
+   2 19/09/25 11:55:40 kadmin/admin@MINDFRUIT.KRB (0x39064a2270b859123cae3255a92a5d207ea05aedcc3da0d6d78f36648a13ffd8)
+   2 19/09/25 11:55:40 kadmin/admin@MINDFRUIT.KRB (0xb09334b319b8e529526602a8ec1fccc8)
+   2 19/09/25 11:55:40 kadmin/admin@MINDFRUIT.KRB (0x56c1ae0ca6c19f6df9c150ad3ca8c8897e17cfffd675370ef97da97aa9b63369)
+   2 19/09/25 11:55:40 kadmin/admin@MINDFRUIT.KRB (0x67d1137062e06a4dca6500f4cc592115)
+   2 19/09/25 11:55:40 kadmin/admin@MINDFRUIT.KRB (0x3ae95c730e9389ea6641f13d997781a4)
+   2 19/09/25 11:55:40 kadmin/changepw@MINDFRUIT.KRB (0x233db2a727e3b3673b011d3d222ab0bf23d7f6efec03175264503902f154ac5e)
+   2 19/09/25 11:55:40 kadmin/changepw@MINDFRUIT.KRB (0x7f200465db9d6db5c25772ece1ddc774)
+   2 19/09/25 11:55:40 kadmin/changepw@MINDFRUIT.KRB (0xfd484d637bb07698866cf0d06b3f0438f3ec60c4ddf60fab030475b3bfece60d)
+   2 19/09/25 11:55:40 kadmin/changepw@MINDFRUIT.KRB (0x396d351e84bf540e02457edbf26de2de)
+   2 19/09/25 11:55:40 kadmin/changepw@MINDFRUIT.KRB (0xbe871cfdeb345e71abcf74f4465efdcc7ca8539ab7f473115276b3e5915ab3eb)
+   2 19/09/25 11:55:40 kadmin/changepw@MINDFRUIT.KRB (0x18b27131743e62c8424f87d6b07a9792)
+   2 19/09/25 11:55:40 kadmin/changepw@MINDFRUIT.KRB (0xfc4d36335ae38a2257edce376bde8fc6)
+   2 19/09/25 11:55:40 krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (0x87cd1ef6f455a929c2c7e93d156b29a7b39cf87f55b63e8b9544f7992510fd68)
+   2 19/09/25 11:55:40 krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (0x165de5a434f882329c6849d4e08cab4d)
+   2 19/09/25 11:55:40 krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (0xd3f9939f51cbc3edd6b36d785a056aa5160b649113f308b64a9c6a75e14e4c1f)
+   2 19/09/25 11:55:40 krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (0xfc424c0dee1624a00b894cfa31002fae)
+   2 19/09/25 11:55:40 krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (0xdb44fd6f1049770830b809a2febe444f20a312fcace031cab20be3b3d632bf82)
+   2 19/09/25 11:55:40 krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (0x7eeeb5a911752281e1373fcd23063f7e)
+   2 19/09/25 11:55:40 krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (0x506d207568d50f43cb03c8ccd137f15e)
+   2 19/09/25 11:55:40 michaelg@MINDFRUIT.KRB (0xfe0bb9bcfed8fb602c3ba862fdb05b64e88e88258a60a3b06db297b0a2684afc)
+   2 19/09/25 11:55:40 michaelg@MINDFRUIT.KRB (0xdcd464e54fba0a8391c997ade96c198e)
+   2 19/09/25 11:55:40 michaelg@MINDFRUIT.KRB (0xee7935b48b5eb471d03ce9b9c3c3698b5ad22b37d14b02618977089056b730b6)
+   2 19/09/25 11:55:40 michaelg@MINDFRUIT.KRB (0x530c502d053d2c802a7a33b2ec6292a8)
+   2 19/09/25 11:55:40 michaelg@MINDFRUIT.KRB (0x5a0ab290b60cefff28b59f822024b914d1641f8f56bbbc79f84609bc9c49a373)
+   2 19/09/25 11:55:40 michaelg@MINDFRUIT.KRB (0x0b098ed781ee73625a851546ec3b1761)
+   2 19/09/25 11:55:40 michaelg@MINDFRUIT.KRB (0x9a3241503fb67aad70c8222838eb5d7e)
+   2 19/09/25 11:55:40 root/admin@MINDFRUIT.KRB (0x11aec522c3cd527abc1f8c7578731de4efbb1a7f558d298a5c90e6d0f7ed10af)
+   2 19/09/25 11:55:40 root/admin@MINDFRUIT.KRB (0xd429d55dba9ea432ba0148b2e1eea5c3)
+   2 19/09/25 11:55:40 root/admin@MINDFRUIT.KRB (0x0ca099e4f04060230f5846af6b6d189a08f72342ad2f734eedf040ce620e884c)
+   2 19/09/25 11:55:40 root/admin@MINDFRUIT.KRB (0x006703a742ecd4a23c323ecb0e948543)
+   2 19/09/25 11:55:40 root/admin@MINDFRUIT.KRB (0x2ea07665a403654102b67c3260eeb312848fe334ace8f2bae25c6aed02c41289)
+   2 19/09/25 11:55:40 root/admin@MINDFRUIT.KRB (0x6dbd921511ac50f4c6543a790e0fe6fc)
+   2 19/09/25 11:55:40 root/admin@MINDFRUIT.KRB (0xd3aa608f5db23dc7d7c248c2c4525715)
+```
+
+Unfortunately, I _still_ couldn't read the Wireshark traces.
+
+I'll write to a new keytab file, with `-norandkey`; oh, wait, no I won't, for some reason `kadmin.local` now fails
+with:
+```
+root@fedora:~# kadmin.local -r MINDFRUIT.KRB
+Authenticating as principal root/admin@MINDFRUIT.KRB with password.
+kadmin.local: Decrypt integrity check failed while initializing kadmin.local interface
+```
+Then trying with the keytab file, it fails slightly differently...
+```
+root@fedora:~# kadmin.local -k /etc/krb5.keytab -r MINDFRUIT.KRB
+kadmin.local: Decrypt integrity check failed while initializing kadmin.local interface
+```
+Ooops...
+Going to rebuild the `/var/local/kerberos/krb5kdc` structures, preserving only the `kadm5.acl` and `kdc.conf` files.
+
+So .. having run through the process again, and set up `HTTP_fedora.keytab` and `michaelg.keytab` (via `michaelg.ccache`), 
+I've now dumped the credentials to a file name `globbed.keytab` but this time with the `-norandkey` option, which
+seems to allow kadmin.local to work:
+```
+root@fedora:~# kadmin.local
+Authenticating as principal root/admin@MINDFRUIT.KRB with password.
+kadmin.local:  ktadd -k /root/globbed.keytab -norandkey -glob *
+Entry for principal HTTP/fedora@MINDFRUIT.KRB with kvno 1, encryption type aes256-cts-hmac-sha384-192 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal HTTP/fedora@MINDFRUIT.KRB with kvno 1, encryption type aes128-cts-hmac-sha256-128 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal HTTP/fedora@MINDFRUIT.KRB with kvno 1, encryption type aes256-cts-hmac-sha1-96 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal HTTP/fedora@MINDFRUIT.KRB with kvno 1, encryption type aes128-cts-hmac-sha1-96 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal HTTP/fedora@MINDFRUIT.KRB with kvno 1, encryption type camellia256-cts-cmac added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal HTTP/fedora@MINDFRUIT.KRB with kvno 1, encryption type camellia128-cts-cmac added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal HTTP/fedora@MINDFRUIT.KRB with kvno 1, encryption type arcfour-hmac added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal K/M@MINDFRUIT.KRB with kvno 1, encryption type aes256-cts-hmac-sha384-192 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal admin/fedora@MINDFRUIT.KRB with kvno 1, encryption type aes256-cts-hmac-sha384-192 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal admin/fedora@MINDFRUIT.KRB with kvno 1, encryption type aes128-cts-hmac-sha256-128 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal admin/fedora@MINDFRUIT.KRB with kvno 1, encryption type aes256-cts-hmac-sha1-96 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal admin/fedora@MINDFRUIT.KRB with kvno 1, encryption type aes128-cts-hmac-sha1-96 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal admin/fedora@MINDFRUIT.KRB with kvno 1, encryption type camellia256-cts-cmac added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal admin/fedora@MINDFRUIT.KRB with kvno 1, encryption type camellia128-cts-cmac added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal admin/fedora@MINDFRUIT.KRB with kvno 1, encryption type arcfour-hmac added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal kadmin/admin@MINDFRUIT.KRB with kvno 1, encryption type aes256-cts-hmac-sha384-192 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal kadmin/admin@MINDFRUIT.KRB with kvno 1, encryption type aes128-cts-hmac-sha256-128 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal kadmin/admin@MINDFRUIT.KRB with kvno 1, encryption type aes256-cts-hmac-sha1-96 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal kadmin/admin@MINDFRUIT.KRB with kvno 1, encryption type aes128-cts-hmac-sha1-96 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal kadmin/admin@MINDFRUIT.KRB with kvno 1, encryption type camellia256-cts-cmac added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal kadmin/admin@MINDFRUIT.KRB with kvno 1, encryption type camellia128-cts-cmac added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal kadmin/admin@MINDFRUIT.KRB with kvno 1, encryption type arcfour-hmac added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal kadmin/changepw@MINDFRUIT.KRB with kvno 1, encryption type aes256-cts-hmac-sha384-192 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal kadmin/changepw@MINDFRUIT.KRB with kvno 1, encryption type aes128-cts-hmac-sha256-128 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal kadmin/changepw@MINDFRUIT.KRB with kvno 1, encryption type aes256-cts-hmac-sha1-96 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal kadmin/changepw@MINDFRUIT.KRB with kvno 1, encryption type aes128-cts-hmac-sha1-96 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal kadmin/changepw@MINDFRUIT.KRB with kvno 1, encryption type camellia256-cts-cmac added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal kadmin/changepw@MINDFRUIT.KRB with kvno 1, encryption type camellia128-cts-cmac added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal kadmin/changepw@MINDFRUIT.KRB with kvno 1, encryption type arcfour-hmac added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB with kvno 1, encryption type aes256-cts-hmac-sha384-192 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB with kvno 1, encryption type aes128-cts-hmac-sha256-128 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB with kvno 1, encryption type aes256-cts-hmac-sha1-96 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB with kvno 1, encryption type aes128-cts-hmac-sha1-96 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB with kvno 1, encryption type camellia256-cts-cmac added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB with kvno 1, encryption type camellia128-cts-cmac added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB with kvno 1, encryption type arcfour-hmac added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal michaelg@MINDFRUIT.KRB with kvno 1, encryption type aes256-cts-hmac-sha384-192 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal michaelg@MINDFRUIT.KRB with kvno 1, encryption type aes128-cts-hmac-sha256-128 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal michaelg@MINDFRUIT.KRB with kvno 1, encryption type aes256-cts-hmac-sha1-96 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal michaelg@MINDFRUIT.KRB with kvno 1, encryption type aes128-cts-hmac-sha1-96 added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal michaelg@MINDFRUIT.KRB with kvno 1, encryption type camellia256-cts-cmac added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal michaelg@MINDFRUIT.KRB with kvno 1, encryption type camellia128-cts-cmac added to keytab WRFILE:/root/globbed.keytab.
+Entry for principal michaelg@MINDFRUIT.KRB with kvno 1, encryption type arcfour-hmac added to keytab WRFILE:/root/globbed.keytab.
+kadmin.local: Principal * does not exist.
+kadmin.local:  q
+```
+
+Wireshark PCAP decrypted
+------------------------
+I set Wireshark's keytab file to `/root/globbed.keytab`. This permits decryption of AS-REP messages.
+
+Here's the entire flow:
+
+Initial AS-REQ, which is rejected:
+```
+Frame 1: 245 bytes on wire (1960 bits), 245 bytes captured (1960 bits) on interface lo, id 1
+Ethernet II, Src: 00:00:00_00:00:00 (00:00:00:00:00:00), Dst: 00:00:00_00:00:00 (00:00:00:00:00:00)
+Internet Protocol Version 4, Src: 127.0.0.1, Dst: 127.0.0.1
+User Datagram Protocol, Src Port: 54014, Dst Port: 88
+Kerberos
+    as-req
+        pvno: 5
+        msg-type: krb-as-req (10)
+        padata: 2 items
+            PA-DATA pA-AS-FRESHNESS
+                padata-type: pA-AS-FRESHNESS (150)
+                    padata-value: <MISSING>
+            PA-DATA pA-REQ-ENC-PA-REP
+                padata-type: pA-REQ-ENC-PA-REP (149)
+                    padata-value: <MISSING>
+        req-body
+            Padding: 0
+            kdc-options: 40800000
+                0... .... = reserved: False
+                .1.. .... = forwardable: True
+                ..0. .... = forwarded: False
+                ...0 .... = proxiable: False
+                .... 0... = proxy: False
+                .... .0.. = allow-postdate: False
+                .... ..0. = postdated: False
+                .... ...0 = unused7: False
+                1... .... = renewable: True
+                .0.. .... = unused9: False
+                ..0. .... = unused10: False
+                ...0 .... = opt-hardware-auth: False
+                .... 0... = unused12: False
+                .... .0.. = unused13: False
+                .... ..0. = constrained-delegation: False
+                .... ...0 = canonicalize: False
+                0... .... = request-anonymous: False
+                .0.. .... = unused17: False
+                ..0. .... = unused18: False
+                ...0 .... = unused19: False
+                .... 0... = unused20: False
+                .... .0.. = unused21: False
+                .... ..0. = unused22: False
+                .... ...0 = unused23: False
+                0... .... = unused24: False
+                .0.. .... = unused25: False
+                ..0. .... = disable-transited-check: False
+                ...0 .... = renewable-ok: False
+                .... 0... = enc-tkt-in-skey: False
+                .... .0.. = unused29: False
+                .... ..0. = renew: False
+                .... ...0 = validate: False
+            cname
+                name-type: kRB5-NT-PRINCIPAL (1)
+                cname-string: 1 item
+                    CNameString: michaelg
+            realm: MINDFRUIT.KRB
+            sname
+                name-type: kRB5-NT-SRV-INST (2)
+                sname-string: 2 items
+                    SNameString: krbtgt
+                    SNameString: MINDFRUIT.KRB
+            till: Sep 20, 2025 12:33:14.000000000 BST
+            rtime: Sep 26, 2025 12:33:14.000000000 BST
+            nonce: 761944527
+            etype: 6 items
+                ENCTYPE: eTYPE-AES256-CTS-HMAC-SHA384-192 (20)
+                ENCTYPE: eTYPE-AES128-CTS-HMAC-SHA256-128 (19)
+                ENCTYPE: eTYPE-AES256-CTS-HMAC-SHA1-96 (18)
+                ENCTYPE: eTYPE-AES128-CTS-HMAC-SHA1-96 (17)
+                ENCTYPE: eTYPE-CAMELLIA256-CTS-CMAC (26)
+                ENCTYPE: eTYPE-CAMELLIA128-CTS-CMAC (25)
+    [Response in: 2]
+
+```
+
+KRB Error:
+```
+Frame 2: 515 bytes on wire (4120 bits), 515 bytes captured (4120 bits) on interface lo, id 1
+Ethernet II, Src: 00:00:00_00:00:00 (00:00:00:00:00:00), Dst: 00:00:00_00:00:00 (00:00:00:00:00:00)
+Internet Protocol Version 4, Src: 127.0.0.1, Dst: 127.0.0.1
+User Datagram Protocol, Src Port: 88, Dst Port: 54014
+Kerberos
+    krb-error
+        pvno: 5
+        msg-type: krb-error (30)
+        stime: Sep 19, 2025 12:33:14.000000000 BST
+        susec: 253393
+        error-code: eRR-PREAUTH-REQUIRED (25)
+        crealm: MINDFRUIT.KRB
+        cname
+            name-type: kRB5-NT-PRINCIPAL (1)
+            cname-string: 1 item
+                CNameString: michaelg
+        realm: MINDFRUIT.KRB
+        sname
+            name-type: kRB5-NT-SRV-INST (2)
+            sname-string: 2 items
+                SNameString: krbtgt
+                SNameString: MINDFRUIT.KRB
+        e-text: NEEDED_PREAUTH
+        e-data […]: 3082012d300aa10402020088a2020400302ba103020113a22404223020301ea003020114a1171b154d494e4446525549542e4b52426d69636861656c673042a10402020097a23a0438a1363034a003020101a122042040b12c0a37d0f3f27126e92b3064602a12d9f90dfc0f247e5519f
+            PA-DATA pA-FX-FAST
+                padata-type: pA-FX-FAST (136)
+                    padata-value: <MISSING>
+            PA-DATA pA-ETYPE-INFO2
+                padata-type: pA-ETYPE-INFO2 (19)
+                    padata-value: 3020301ea003020114a1171b154d494e4446525549542e4b52426d69636861656c67
+                        ETYPE-INFO2-ENTRY
+                            etype: eTYPE-AES256-CTS-HMAC-SHA384-192 (20)
+                            salt: MINDFRUIT.KRBmichaelg
+            PA-DATA pA-SPAKE
+                padata-type: pA-SPAKE (151)
+                    padata-value: a1363034a003020101a122042040b12c0a37d0f3f27126e92b3064602a12d9f90dfc0f247e5519fb3f22afe064a20930073005a003020101 challenge
+                        challenge
+                            group: sPAKEGroup-edwards25519 (1)
+                            pubkey: 40b12c0a37d0f3f27126e92b3064602a12d9f90dfc0f247e5519fb3f22afe064
+                            factors: 1 item
+                                SPAKESecondFactor
+                                    type: sPAKESecondFactor-SF-NONE (1)
+            PA-DATA pA-ENC-TIMESTAMP
+                padata-type: pA-ENC-TIMESTAMP (2)
+                    padata-value: <MISSING>
+            PA-DATA pA-FX-COOKIE
+                padata-type: pA-FX-COOKIE (133)
+                    padata-value […]: 4d49543100000001f030a04af767f95404e54bcf1b6fe2652ce91ef29cb94c7e67f4622da8d2af9ac6c58618390f3419a872e94daa93722ce177e5ccba18d9d6f7d840802621a7c1cd1bf19e66e644182436ebe5f72641fc5008a10cd09eaa6e51ebd024018adfa272fface15b3
+    [Response to: 1]
+    [Time from request: 0.000519271 seconds]
+
+```
+
+
+```
+Frame 3: 528 bytes on wire (4224 bits), 528 bytes captured (4224 bits) on interface lo, id 1
+Ethernet II, Src: 00:00:00_00:00:00 (00:00:00:00:00:00), Dst: 00:00:00_00:00:00 (00:00:00:00:00:00)
+Internet Protocol Version 4, Src: 127.0.0.1, Dst: 127.0.0.1
+User Datagram Protocol, Src Port: 35153, Dst Port: 88
+Kerberos
+    as-req
+        pvno: 5
+        msg-type: krb-as-req (10)
+        padata: 4 items
+            PA-DATA pA-FX-COOKIE
+                padata-type: pA-FX-COOKIE (133)
+                    padata-value […]: 4d49543100000001f030a04af767f95404e54bcf1b6fe2652ce91ef29cb94c7e67f4622da8d2af9ac6c58618390f3419a872e94daa93722ce177e5ccba18d9d6f7d840802621a7c1cd1bf19e66e644182436ebe5f72641fc5008a10cd09eaa6e51ebd024018adfa272fface15b3
+            PA-DATA pA-SPAKE
+                padata-type: pA-SPAKE (151)
+                    padata-value: a2623060a0220420598b60e430c0380343048eabc9373c38a3a482ddb044980043f90743286ce2caa13a3038a003020114a231042f0467d5cc24fe64dda0e577f4704bbd59d6968a1d0eb9caf50df629666f7efb2622469570d533de28f1cfcc213bd625 response
+                        response
+                            pubkey: 598b60e430c0380343048eabc9373c38a3a482ddb044980043f90743286ce2ca
+                            factor
+                                etype: eTYPE-AES256-CTS-HMAC-SHA384-192 (20)
+                                cipher: 0467d5cc24fe64dda0e577f4704bbd59d6968a1d0eb9caf50df629666f7efb2622469570d533de28f1cfcc213bd625
+            PA-DATA pA-AS-FRESHNESS
+                padata-type: pA-AS-FRESHNESS (150)
+                    padata-value: <MISSING>
+            PA-DATA pA-REQ-ENC-PA-REP
+                padata-type: pA-REQ-ENC-PA-REP (149)
+                    padata-value: <MISSING>
+        req-body
+            Padding: 0
+            kdc-options: 40800000
+                0... .... = reserved: False
+                .1.. .... = forwardable: True
+                ..0. .... = forwarded: False
+                ...0 .... = proxiable: False
+                .... 0... = proxy: False
+                .... .0.. = allow-postdate: False
+                .... ..0. = postdated: False
+                .... ...0 = unused7: False
+                1... .... = renewable: True
+                .0.. .... = unused9: False
+                ..0. .... = unused10: False
+                ...0 .... = opt-hardware-auth: False
+                .... 0... = unused12: False
+                .... .0.. = unused13: False
+                .... ..0. = constrained-delegation: False
+                .... ...0 = canonicalize: False
+                0... .... = request-anonymous: False
+                .0.. .... = unused17: False
+                ..0. .... = unused18: False
+                ...0 .... = unused19: False
+                .... 0... = unused20: False
+                .... .0.. = unused21: False
+                .... ..0. = unused22: False
+                .... ...0 = unused23: False
+                0... .... = unused24: False
+                .0.. .... = unused25: False
+                ..0. .... = disable-transited-check: False
+                ...0 .... = renewable-ok: False
+                .... 0... = enc-tkt-in-skey: False
+                .... .0.. = unused29: False
+                .... ..0. = renew: False
+                .... ...0 = validate: False
+            cname
+                name-type: kRB5-NT-PRINCIPAL (1)
+                cname-string: 1 item
+                    CNameString: michaelg
+            realm: MINDFRUIT.KRB
+            sname
+                name-type: kRB5-NT-SRV-INST (2)
+                sname-string: 2 items
+                    SNameString: krbtgt
+                    SNameString: MINDFRUIT.KRB
+            till: Sep 20, 2025 12:33:14.000000000 BST
+            rtime: Sep 26, 2025 12:33:14.000000000 BST
+            nonce: 507040266
+            etype: 6 items
+                ENCTYPE: eTYPE-AES256-CTS-HMAC-SHA384-192 (20)
+                ENCTYPE: eTYPE-AES128-CTS-HMAC-SHA256-128 (19)
+                ENCTYPE: eTYPE-AES256-CTS-HMAC-SHA1-96 (18)
+                ENCTYPE: eTYPE-AES128-CTS-HMAC-SHA1-96 (17)
+                ENCTYPE: eTYPE-CAMELLIA256-CTS-CMAC (26)
+                ENCTYPE: eTYPE-CAMELLIA128-CTS-CMAC (25)
+    [Response in: 4]
+```
+
+Here's the decrypted AS-REP
+```
+Frame 4: 981 bytes on wire (7848 bits), 981 bytes captured (7848 bits) on interface lo, id 1
+Ethernet II, Src: 00:00:00_00:00:00 (00:00:00:00:00:00), Dst: 00:00:00_00:00:00 (00:00:00:00:00:00)
+Internet Protocol Version 4, Src: 127.0.0.1, Dst: 127.0.0.1
+User Datagram Protocol, Src Port: 88, Dst Port: 35153
+Kerberos
+    as-rep
+        pvno: 5
+        msg-type: krb-as-rep (11)
+        padata: 1 item
+            PA-DATA pA-ETYPE-INFO2
+                padata-type: pA-ETYPE-INFO2 (19)
+                    padata-value: 3020301ea003020114a1171b154d494e4446525549542e4b52426d69636861656c67
+                        ETYPE-INFO2-ENTRY
+                            etype: eTYPE-AES256-CTS-HMAC-SHA384-192 (20)
+                            salt: MINDFRUIT.KRBmichaelg
+        crealm: MINDFRUIT.KRB
+        cname
+            name-type: kRB5-NT-PRINCIPAL (1)
+            cname-string: 1 item
+                CNameString: michaelg
+        ticket
+            tkt-vno: 5
+            realm: MINDFRUIT.KRB
+            sname
+                name-type: kRB5-NT-SRV-INST (2)
+                sname-string: 2 items
+                    SNameString: krbtgt
+                    SNameString: MINDFRUIT.KRB
+            enc-part
+                etype: eTYPE-AES256-CTS-HMAC-SHA384-192 (20)
+                kvno: 1
+                cipher […]: e95832a16234355db00c2c9a4ef90ab853b359eaeb68aac2f2d9a7f22d3c82c56fbca07dcc35ad0c07bf9aacf7562cb14665869081ed481fa492f2ad7138d3c030d37850b492f65985e7c47e1f9fe03c6874643d5bcf96ecc3443300747cecfdb8536e7edd695365e08d744deb6237b6d
+                    Decrypted keytype 20 usage 2 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)
+                        [Expert Info (Chat/Security): Decrypted keytype 20 usage 2 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)]
+                            [Decrypted keytype 20 usage 2 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)]
+                            [Severity level: Chat]
+                            [Group: Security]
+                        [Expert Info (Chat/Security): Used keymap=all_keys num_keys=49 num_tries=4)]
+                            [Used keymap=all_keys num_keys=49 num_tries=4)]
+                            [Severity level: Chat]
+                            [Group: Security]
+                    encTicketPart
+                        Padding: 0
+                        flags: 40e10000
+                            0... .... = reserved: False
+                            .1.. .... = forwardable: True
+                            ..0. .... = forwarded: False
+                            ...0 .... = proxiable: False
+                            .... 0... = proxy: False
+                            .... .0.. = may-postdate: False
+                            .... ..0. = postdated: False
+                            .... ...0 = invalid: False
+                            1... .... = renewable: True
+                            .1.. .... = initial: True
+                            ..1. .... = pre-authent: True
+                            ...0 .... = hw-authent: False
+                            .... 0... = transited-policy-checked: False
+                            .... .0.. = ok-as-delegate: False
+                            .... ..0. = unused: False
+                            .... ...1 = enc-pa-rep: True
+                            0... .... = anonymous: False
+                        key
+                            Learnt encTicketPart_key keytype 20 (id=4.1) (f433cc69...)
+                                [Expert Info (Chat/Security): Learnt encTicketPart_key keytype 20 (id=4.1) (f433cc69...)]
+                                    [Learnt encTicketPart_key keytype 20 (id=4.1) (f433cc69...)]
+                                    [Severity level: Chat]
+                                    [Group: Security]
+                            keytype: 20
+                            keyvalue: f433cc6976ad1d35092e1ee6bdd9af997d585ed51d0aba5593469077ab99a91b
+                        crealm: MINDFRUIT.KRB
+                        cname
+                            name-type: kRB5-NT-PRINCIPAL (1)
+                            cname-string: 1 item
+                                CNameString: michaelg
+                        transited
+                            tr-type: 1
+                            contents: <MISSING>
+                        authtime: Sep 19, 2025 12:33:14.000000000 BST
+                        endtime: Sep 20, 2025 12:33:14.000000000 BST
+                        renew-till: Sep 19, 2025 12:33:14.000000000 BST
+                        authorization-data: 1 item
+                            AuthorizationData item
+                                ad-type: aD-IF-RELEVANT (1)
+                                ad-data […]: 3081a73081a4a00402020080a1819b04819803000000000000000a0000001a0000003800000000000000060000001c0000005800000000000000070000001c000000780000000000000000b97f2f5929dc0110006d00690063006800610065006c0067000000000000001400000071a9
+                                    AuthorizationData item
+                                        ad-type: aD-WIN2K-PAC (128)
+                                        ad-data […]: 03000000000000000a0000001a0000003800000000000000060000001c0000005800000000000000070000001c000000780000000000000000b97f2f5929dc0110006d00690063006800610065006c0067000000000000001400000071a975f5aeb333b1b147ff33ce49a859d23e0e34
+                                            Verified Server checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)
+                                                [Expert Info (Chat/Security): Verified Server checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)]
+                                                    [Verified Server checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)]
+                                                    [Severity level: Chat]
+                                                    [Group: Security]
+                                                [Expert Info (Chat/Security): Used keymap=all_keys num_keys=49 num_tries=4)]
+                                                    [Used keymap=all_keys num_keys=49 num_tries=4)]
+                                                    [Severity level: Chat]
+                                                    [Group: Security]
+                                            Verified KDC checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)
+                                                [Expert Info (Chat/Security): Verified KDC checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)]
+                                                    [Verified KDC checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)]
+                                                    [Severity level: Chat]
+                                                    [Group: Security]
+                                                [Expert Info (Chat/Security): Used keymap=longterm_keys num_keys=43 num_tries=2)]
+                                                    [Used keymap=longterm_keys num_keys=43 num_tries=2)]
+                                                    [Severity level: Chat]
+                                                    [Group: Security]
+                                            Num Entries: 3
+                                            Version: 0
+                                            Type: Client Info Type (10)
+                                                Size: 26
+                                                Offset: 56
+                                                PAC_CLIENT_INFO_TYPE: 00b97f2f5929dc0110006d00690063006800610065006c006700
+                                                    ClientID: Sep 19, 2025 12:33:14.000000000 BST
+                                                    Name Length: 16
+                                                    Name: michaelg
+                                            Type: Server Checksum (6)
+                                                Size: 28
+                                                Offset: 88
+                                                PAC_SERVER_CHECKSUM: 1400000071a975f5aeb333b1b147ff33ce49a859d23e0e34276420eb
+                                                    Type: 20
+                                                    Signature: 71a975f5aeb333b1b147ff33ce49a859d23e0e34276420eb
+                                            Type: Privsvr Checksum (7)
+                                                Size: 28
+                                                Offset: 120
+                                                PAC_PRIVSVR_CHECKSUM: 14000000fa8aa775f83c08c806a471c66ab9a327d7ea1dabf9a5ff6f
+                                                    Type: 20
+                                                    Signature: fa8aa775f83c08c806a471c66ab9a327d7ea1dabf9a5ff6f
+        enc-part
+            etype: eTYPE-AES256-CTS-HMAC-SHA384-192 (20)
+            cipher […]: 37683a5a6025463acb3a74fc8904e32d78aa0999d91108181e32f7ad62fe01688c68c4fc83f7b6e41aeb43f0cbc5ced6e09cbc4b2524617e259f9606556aac296f423bdb39012a6ad84826fa1a6a721ff1b3a2abc1d984331ad8a1eedb555561ae733a0312fdf9593453973046e2fca37
+                Missing keytype 20 usage 3 (id=missing.1)
+                    [Expert Info (Warning/Decryption): Missing keytype 20 usage 3 (id=missing.1)]
+                        [Missing keytype 20 usage 3 (id=missing.1)]
+                        [Severity level: Warning]
+                        [Group: Decryption]
+                    [Expert Info (Warning/Decryption): Used keymap=all_keys num_keys=49 num_tries=13)]
+                        [Used keymap=all_keys num_keys=49 num_tries=13)]
+                        [Severity level: Warning]
+                        [Group: Decryption]
+    [Response to: 3]
+    [Time from request: 0.005412309 seconds]
+    Provides learnt encTicketPart_key in frame 4 keytype 20 (id=4.1 same=0) (f433cc69...)
+        [Expert Info (Chat/Security): Provides learnt encTicketPart_key in frame 4 keytype 20 (id=4.1 same=0) (f433cc69...)]
+            [Provides learnt encTicketPart_key in frame 4 keytype 20 (id=4.1 same=0) (f433cc69...)]
+            [Severity level: Chat]
+            [Group: Security]
+    Missing keytype 20 usage 3 missing in frame 4 keytype 20 (id=missing.1 same=0) (00000000...)
+        [Expert Info (Warning/Decryption): Missing keytype 20 usage 3 missing in frame 4 keytype 20 (id=missing.1 same=0) (00000000...)]
+            [Missing keytype 20 usage 3 missing in frame 4 keytype 20 (id=missing.1 same=0) (00000000...)]
+            [Severity level: Warning]
+            [Group: Decryption]
+    Used keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB keytype 20 (id=keytab.30 same=0) (b2446b78...)
+        [Expert Info (Chat/Security): Used keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB keytype 20 (id=keytab.30 same=0) (b2446b78...)]
+            [Used keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB keytype 20 (id=keytab.30 same=0) (b2446b78...)]
+            [Severity level: Chat]
+            [Group: Security]
+```
+
+TGT-REQ:
+```
+Frame 5: 1168 bytes on wire (9344 bits), 1168 bytes captured (9344 bits) on interface lo, id 1
+Ethernet II, Src: 00:00:00_00:00:00 (00:00:00:00:00:00), Dst: 00:00:00_00:00:00 (00:00:00:00:00:00)
+Internet Protocol Version 4, Src: 127.0.0.1, Dst: 127.0.0.1
+User Datagram Protocol, Src Port: 60191, Dst Port: 88
+Kerberos
+    tgs-req
+        pvno: 5
+        msg-type: krb-tgs-req (12)
+        padata: 2 items
+            PA-DATA pA-TGS-REQ
+                padata-type: pA-TGS-REQ (1)
+                    padata-value […]: 6e8202e1308202dda003020105a10302010ea20703050000000000a38201ee618201ea308201e6a003020105a10f1b0d4d494e4446525549542e4b5242a2223020a003020102a11930171b066b72627467741b0d4d494e4446525549542e4b5242a38201a8308201a4a00302011
+                        ap-req
+                            pvno: 5
+                            msg-type: krb-ap-req (14)
+                            Padding: 0
+                            ap-options: 00000000
+                                0... .... = reserved: False
+                                .0.. .... = use-session-key: False
+                                ..0. .... = mutual-required: False
+                            ticket
+                                tkt-vno: 5
+                                realm: MINDFRUIT.KRB
+                                sname
+                                    name-type: kRB5-NT-SRV-INST (2)
+                                    sname-string: 2 items
+                                        SNameString: krbtgt
+                                        SNameString: MINDFRUIT.KRB
+                                enc-part
+                                    etype: eTYPE-AES256-CTS-HMAC-SHA384-192 (20)
+                                    kvno: 1
+                                    cipher […]: e95832a16234355db00c2c9a4ef90ab853b359eaeb68aac2f2d9a7f22d3c82c56fbca07dcc35ad0c07bf9aacf7562cb14665869081ed481fa492f2ad7138d3c030d37850b492f65985e7c47e1f9fe03c6874643d5bcf96ecc3443300747cecfdb8536e7edd695365e08d744deb6237b6d
+                                        Decrypted keytype 20 usage 2 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)
+                                            [Expert Info (Chat/Security): Decrypted keytype 20 usage 2 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)]
+                                                [Decrypted keytype 20 usage 2 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)]
+                                                [Severity level: Chat]
+                                                [Group: Security]
+                                            [Expert Info (Chat/Security): Used keymap=all_keys num_keys=49 num_tries=4)]
+                                                [Used keymap=all_keys num_keys=49 num_tries=4)]
+                                                [Severity level: Chat]
+                                                [Group: Security]
+                                        encTicketPart
+                                            Padding: 0
+                                            flags: 40e10000
+                                                0... .... = reserved: False
+                                                .1.. .... = forwardable: True
+                                                ..0. .... = forwarded: False
+                                                ...0 .... = proxiable: False
+                                                .... 0... = proxy: False
+                                                .... .0.. = may-postdate: False
+                                                .... ..0. = postdated: False
+                                                .... ...0 = invalid: False
+                                                1... .... = renewable: True
+                                                .1.. .... = initial: True
+                                                ..1. .... = pre-authent: True
+                                                ...0 .... = hw-authent: False
+                                                .... 0... = transited-policy-checked: False
+                                                .... .0.. = ok-as-delegate: False
+                                                .... ..0. = unused: False
+                                                .... ...1 = enc-pa-rep: True
+                                                0... .... = anonymous: False
+                                            key
+                                                Learnt encTicketPart_key keytype 20 (id=5.1) (f433cc69...)
+                                                    [Expert Info (Chat/Security): Learnt encTicketPart_key keytype 20 (id=5.1) (f433cc69...)]
+                                                        [Learnt encTicketPart_key keytype 20 (id=5.1) (f433cc69...)]
+                                                        [Severity level: Chat]
+                                                        [Group: Security]
+                                                keytype: 20
+                                                keyvalue: f433cc6976ad1d35092e1ee6bdd9af997d585ed51d0aba5593469077ab99a91b
+                                            crealm: MINDFRUIT.KRB
+                                            cname
+                                                name-type: kRB5-NT-PRINCIPAL (1)
+                                                cname-string: 1 item
+                                                    CNameString: michaelg
+                                            transited
+                                                tr-type: 1
+                                                contents: <MISSING>
+                                            authtime: Sep 19, 2025 12:33:14.000000000 BST
+                                            endtime: Sep 20, 2025 12:33:14.000000000 BST
+                                            renew-till: Sep 19, 2025 12:33:14.000000000 BST
+                                            authorization-data: 1 item
+                                                AuthorizationData item
+                                                    ad-type: aD-IF-RELEVANT (1)
+                                                    ad-data […]: 3081a73081a4a00402020080a1819b04819803000000000000000a0000001a0000003800000000000000060000001c0000005800000000000000070000001c000000780000000000000000b97f2f5929dc0110006d00690063006800610065006c0067000000000000001400000071a9
+                                                        AuthorizationData item
+                                                            ad-type: aD-WIN2K-PAC (128)
+                                                            ad-data […]: 03000000000000000a0000001a0000003800000000000000060000001c0000005800000000000000070000001c000000780000000000000000b97f2f5929dc0110006d00690063006800610065006c0067000000000000001400000071a975f5aeb333b1b147ff33ce49a859d23e0e34
+                                                                Verified Server checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)
+                                                                    [Expert Info (Chat/Security): Verified Server checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)]
+                                                                        [Verified Server checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)]
+                                                                        [Severity level: Chat]
+                                                                        [Group: Security]
+                                                                    [Expert Info (Chat/Security): Used keymap=all_keys num_keys=49 num_tries=4)]
+                                                                        [Used keymap=all_keys num_keys=49 num_tries=4)]
+                                                                        [Severity level: Chat]
+                                                                        [Group: Security]
+                                                                Verified KDC checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)
+                                                                    [Expert Info (Chat/Security): Verified KDC checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)]
+                                                                        [Verified KDC checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)]
+                                                                        [Severity level: Chat]
+                                                                        [Group: Security]
+                                                                    [Expert Info (Chat/Security): Used keymap=longterm_keys num_keys=43 num_tries=2)]
+                                                                        [Used keymap=longterm_keys num_keys=43 num_tries=2)]
+                                                                        [Severity level: Chat]
+                                                                        [Group: Security]
+                                                                Num Entries: 3
+                                                                Version: 0
+                                                                Type: Client Info Type (10)
+                                                                    Size: 26
+                                                                    Offset: 56
+                                                                    PAC_CLIENT_INFO_TYPE: 00b97f2f5929dc0110006d00690063006800610065006c006700
+                                                                        ClientID: Sep 19, 2025 12:33:14.000000000 BST
+                                                                        Name Length: 16
+                                                                        Name: michaelg
+                                                                Type: Server Checksum (6)
+                                                                    Size: 28
+                                                                    Offset: 88
+                                                                    PAC_SERVER_CHECKSUM: 1400000071a975f5aeb333b1b147ff33ce49a859d23e0e34276420eb
+                                                                        Type: 20
+                                                                        Signature: 71a975f5aeb333b1b147ff33ce49a859d23e0e34276420eb
+                                                                Type: Privsvr Checksum (7)
+                                                                    Size: 28
+                                                                    Offset: 120
+                                                                    PAC_PRIVSVR_CHECKSUM: 14000000fa8aa775f83c08c806a471c66ab9a327d7ea1dabf9a5ff6f
+                                                                        Type: 20
+                                                                        Signature: fa8aa775f83c08c806a471c66ab9a327d7ea1dabf9a5ff6f
+                            authenticator
+                                etype: eTYPE-AES256-CTS-HMAC-SHA384-192 (20)
+                                cipher […]: 3646a2195739f63e4e40c34155da9a8da0e44a3702a67ccbb7d8f71f25deb658c31ca01e8caf3524e131829a1740036a2b9e7a4f585e67d4e840bee1bb1f5c282b2338527bfed8546a70fb7de4e20ad23b465896232f8e689d4a04781f9819089e68e01611d497267a649d3751c3de582
+                                    Decrypted keytype 20 usage 7 using learnt encTicketPart_key in frame 4 (id=4.1 same=1) (f433cc69...)
+                                        [Expert Info (Chat/Security): Decrypted keytype 20 usage 7 using learnt encTicketPart_key in frame 4 (id=4.1 same=1) (f433cc69...)]
+                                            [Decrypted keytype 20 usage 7 using learnt encTicketPart_key in frame 4 (id=4.1 same=1) (f433cc69...)]
+                                            [Severity level: Chat]
+                                            [Group: Security]
+                                        [Expert Info (Chat/Security): Used keymap=all_keys num_keys=49 num_tries=5)]
+                                            [Used keymap=all_keys num_keys=49 num_tries=5)]
+                                            [Severity level: Chat]
+                                            [Group: Security]
+                                        [Expert Info (Chat/Security): Decrypted keytype 20 usage 7 using learnt encTicketPart_key in frame 5 (id=5.1 same=0) (f433cc69...)]
+                                            [Decrypted keytype 20 usage 7 using learnt encTicketPart_key in frame 5 (id=5.1 same=0) (f433cc69...)]
+                                            [Severity level: Chat]
+                                            [Group: Security]
+                                    authenticator
+                                        authenticator-vno: 5
+                                        crealm: MINDFRUIT.KRB
+                                        cname
+                                            name-type: kRB5-NT-PRINCIPAL (1)
+                                            cname-string: 1 item
+                                                CNameString: michaelg
+                                        cksum
+                                            cksumtype: cKSUMTYPE-HMAC-SHA384-192-AES256 (20)
+                                            checksum: a9a713c5b97ab6661fad6320d213cbc9974faeeeaf9264d3
+                                        cusec: 249620
+                                        ctime: Sep 19, 2025 12:33:14.000000000 BST
+                                        subkey
+                                            Learnt authenticator_subkey keytype 20 (id=5.2) (5b29f8aa...)
+                                                [Expert Info (Chat/Security): Learnt authenticator_subkey keytype 20 (id=5.2) (5b29f8aa...)]
+                                                    [Learnt authenticator_subkey keytype 20 (id=5.2) (5b29f8aa...)]
+                                                    [Severity level: Chat]
+                                                    [Group: Security]
+                                            keytype: 20
+                                            keyvalue: 5b29f8aacc810ffdf2945d43e36edeffc74eb7e60f3d4c9a3db272dd4a5f6831
+            PA-DATA pA-FX-FAST
+                padata-type: pA-FX-FAST (136)
+                    padata-value […]: a081da3081d7a1233021a003020114a11a0418306295e6ca7895fcaf7c4e73c93c84de1c22c44b0eba7264a281af3081aca003020114a281a40481a1ee44b701933522ccf276ee52d98a2b5e2296248b1821dfa84e8a7d5f40dcad934620505c84f789260c73247010091405c3e
+                        armored-data
+                            req-checksum
+                                cksumtype: cKSUMTYPE-HMAC-SHA384-192-AES256 (20)
+                                checksum: 306295e6ca7895fcaf7c4e73c93c84de1c22c44b0eba7264
+                            enc-fast-req
+                                etype: eTYPE-AES256-CTS-HMAC-SHA384-192 (20)
+                                cipher […]: ee44b701933522ccf276ee52d98a2b5e2296248b1821dfa84e8a7d5f40dcad934620505c84f789260c73247010091405c3e8dfc5f86c38645056b605edb6ea01326d16cab8a227c6cbcce303e9ac0cba5350d19311ddd822a270c9f31ae0058dc7b74b50e809808bdcfef76adfd649bb2
+                                    Derived KrbFastReq_TGS_armorKey keytype 20 (id=5.3) (01750ba9...)
+                                        [Expert Info (Chat/Security): Derived KrbFastReq_TGS_armorKey keytype 20 (id=5.3) (01750ba9...)]
+                                            [Derived KrbFastReq_TGS_armorKey keytype 20 (id=5.3) (01750ba9...)]
+                                            [Severity level: Chat]
+                                            [Group: Security]
+                                        [Expert Info (Chat/Security): SRC1 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+                                            [SRC1 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+                                            [Severity level: Chat]
+                                            [Group: Security]
+                                        [Expert Info (Chat/Security): SRC2 learnt encTicketPart_key in frame 4 keytype 20 (id=4.1 same=1) (f433cc69...)]
+                                            [SRC2 learnt encTicketPart_key in frame 4 keytype 20 (id=4.1 same=1) (f433cc69...)]
+                                            [Severity level: Chat]
+                                            [Group: Security]
+                                    Decrypted keytype 20 usage 51 using derived KrbFastReq_TGS_armorKey in frame 5 (id=5.3 same=0) (01750ba9...)
+                                        [Expert Info (Chat/Security): Decrypted keytype 20 usage 51 using derived KrbFastReq_TGS_armorKey in frame 5 (id=5.3 same=0) (01750ba9...)]
+                                            [Decrypted keytype 20 usage 51 using derived KrbFastReq_TGS_armorKey in frame 5 (id=5.3 same=0) (01750ba9...)]
+                                            [Severity level: Chat]
+                                            [Group: Security]
+                                        [Expert Info (Chat/Security): Used keymap=all_keys num_keys=49 num_tries=12)]
+                                            [Used keymap=all_keys num_keys=49 num_tries=12)]
+                                            [Severity level: Chat]
+                                            [Group: Security]
+                                        [Expert Info (Chat/Security): SRC1 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+                                            [SRC1 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+                                            [Severity level: Chat]
+                                            [Group: Security]
+                                        [Expert Info (Chat/Security): SRC2 learnt encTicketPart_key in frame 4 keytype 20 (id=4.1 same=1) (f433cc69...)]
+                                            [SRC2 learnt encTicketPart_key in frame 4 keytype 20 (id=4.1 same=1) (f433cc69...)]
+                                            [Severity level: Chat]
+                                            [Group: Security]
+                                    Padding: 0
+                                    fast-options: 00000000
+                                        0... .... = reserved: False
+                                        .0.. .... = hide-client-names: False
+                                        ..0. .... = spare_bit2: False
+                                        ...0 .... = spare_bit3: False
+                                        .... 0... = spare_bit4: False
+                                        .... .0.. = spare_bit5: False
+                                        .... ..0. = spare_bit6: False
+                                        .... ...0 = spare_bit7: False
+                                        0... .... = spare_bit8: False
+                                        .0.. .... = spare_bit9: False
+                                        ..0. .... = spare_bit10: False
+                                        ...0 .... = spare_bit11: False
+                                        .... 0... = spare_bit12: False
+                                        .... .0.. = spare_bit13: False
+                                        .... ..0. = spare_bit14: False
+                                        .... ...0 = spare_bit15: False
+                                        0... .... = kdc-follow-referrals: False
+                                    padata: 0 items
+                                    req-body
+                                        Padding: 0
+                                        kdc-options: 40810000
+                                            0... .... = reserved: False
+                                            .1.. .... = forwardable: True
+                                            ..0. .... = forwarded: False
+                                            ...0 .... = proxiable: False
+                                            .... 0... = proxy: False
+                                            .... .0.. = allow-postdate: False
+                                            .... ..0. = postdated: False
+                                            .... ...0 = unused7: False
+                                            1... .... = renewable: True
+                                            .0.. .... = unused9: False
+                                            ..0. .... = unused10: False
+                                            ...0 .... = opt-hardware-auth: False
+                                            .... 0... = unused12: False
+                                            .... .0.. = unused13: False
+                                            .... ..0. = constrained-delegation: False
+                                            .... ...1 = canonicalize: True
+                                            0... .... = request-anonymous: False
+                                            .0.. .... = unused17: False
+                                            ..0. .... = unused18: False
+                                            ...0 .... = unused19: False
+                                            .... 0... = unused20: False
+                                            .... .0.. = unused21: False
+                                            .... ..0. = unused22: False
+                                            .... ...0 = unused23: False
+                                            0... .... = unused24: False
+                                            .0.. .... = unused25: False
+                                            ..0. .... = disable-transited-check: False
+                                            ...0 .... = renewable-ok: False
+                                            .... 0... = enc-tkt-in-skey: False
+                                            .... .0.. = unused29: False
+                                            .... ..0. = renew: False
+                                            .... ...0 = validate: False
+                                        realm: MINDFRUIT.KRB
+                                        sname
+                                            name-type: kRB5-NT-SRV-HST (3)
+                                            sname-string: 2 items
+                                                SNameString: HTTP
+                                                SNameString: fedora
+                                        till: Sep 20, 2025 12:33:14.000000000 BST
+                                        nonce: 812528889
+                                        etype: 6 items
+                                            ENCTYPE: eTYPE-AES256-CTS-HMAC-SHA384-192 (20)
+                                            ENCTYPE: eTYPE-AES128-CTS-HMAC-SHA256-128 (19)
+                                            ENCTYPE: eTYPE-AES256-CTS-HMAC-SHA1-96 (18)
+                                            ENCTYPE: eTYPE-AES128-CTS-HMAC-SHA1-96 (17)
+                                            ENCTYPE: eTYPE-CAMELLIA256-CTS-CMAC (26)
+                                            ENCTYPE: eTYPE-CAMELLIA128-CTS-CMAC (25)
+        req-body
+            Padding: 0
+            kdc-options: 40810000
+                0... .... = reserved: False
+                .1.. .... = forwardable: True
+                ..0. .... = forwarded: False
+                ...0 .... = proxiable: False
+                .... 0... = proxy: False
+                .... .0.. = allow-postdate: False
+                .... ..0. = postdated: False
+                .... ...0 = unused7: False
+                1... .... = renewable: True
+                .0.. .... = unused9: False
+                ..0. .... = unused10: False
+                ...0 .... = opt-hardware-auth: False
+                .... 0... = unused12: False
+                .... .0.. = unused13: False
+                .... ..0. = constrained-delegation: False
+                .... ...1 = canonicalize: True
+                0... .... = request-anonymous: False
+                .0.. .... = unused17: False
+                ..0. .... = unused18: False
+                ...0 .... = unused19: False
+                .... 0... = unused20: False
+                .... .0.. = unused21: False
+                .... ..0. = unused22: False
+                .... ...0 = unused23: False
+                0... .... = unused24: False
+                .0.. .... = unused25: False
+                ..0. .... = disable-transited-check: False
+                ...0 .... = renewable-ok: False
+                .... 0... = enc-tkt-in-skey: False
+                .... .0.. = unused29: False
+                .... ..0. = renew: False
+                .... ...0 = validate: False
+            realm: MINDFRUIT.KRB
+            sname
+                name-type: kRB5-NT-SRV-HST (3)
+                sname-string: 2 items
+                    SNameString: HTTP
+                    SNameString: fedora
+            till: Sep 20, 2025 12:33:14.000000000 BST
+            nonce: 812528889
+            etype: 6 items
+                ENCTYPE: eTYPE-AES256-CTS-HMAC-SHA384-192 (20)
+                ENCTYPE: eTYPE-AES128-CTS-HMAC-SHA256-128 (19)
+                ENCTYPE: eTYPE-AES256-CTS-HMAC-SHA1-96 (18)
+                ENCTYPE: eTYPE-AES128-CTS-HMAC-SHA1-96 (17)
+                ENCTYPE: eTYPE-CAMELLIA256-CTS-CMAC (26)
+                ENCTYPE: eTYPE-CAMELLIA128-CTS-CMAC (25)
+    [Response in: 6]
+    Provides learnt encTicketPart_key in frame 5 keytype 20 (id=5.1 same=0) (f433cc69...)
+        [Expert Info (Chat/Security): Provides learnt encTicketPart_key in frame 5 keytype 20 (id=5.1 same=0) (f433cc69...)]
+            [Provides learnt encTicketPart_key in frame 5 keytype 20 (id=5.1 same=0) (f433cc69...)]
+            [Severity level: Chat]
+            [Group: Security]
+    Provides learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)
+        [Expert Info (Chat/Security): Provides learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+            [Provides learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+            [Severity level: Chat]
+            [Group: Security]
+    Provides derived KrbFastReq_TGS_armorKey in frame 5 keytype 20 (id=5.3 same=0) (01750ba9...)
+        [Expert Info (Chat/Security): Provides derived KrbFastReq_TGS_armorKey in frame 5 keytype 20 (id=5.3 same=0) (01750ba9...)]
+            [Provides derived KrbFastReq_TGS_armorKey in frame 5 keytype 20 (id=5.3 same=0) (01750ba9...)]
+            [Severity level: Chat]
+            [Group: Security]
+        [Expert Info (Chat/Security): SRC1 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+            [SRC1 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+            [Severity level: Chat]
+            [Group: Security]
+        [Expert Info (Chat/Security): SRC2 learnt encTicketPart_key in frame 4 keytype 20 (id=4.1 same=1) (f433cc69...)]
+            [SRC2 learnt encTicketPart_key in frame 4 keytype 20 (id=4.1 same=1) (f433cc69...)]
+            [Severity level: Chat]
+            [Group: Security]
+    Used keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB keytype 20 (id=keytab.30 same=0) (b2446b78...)
+        [Expert Info (Chat/Security): Used keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB keytype 20 (id=keytab.30 same=0) (b2446b78...)]
+            [Used keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB keytype 20 (id=keytab.30 same=0) (b2446b78...)]
+            [Severity level: Chat]
+            [Group: Security]
+    Used learnt encTicketPart_key in frame 4 keytype 20 (id=4.1 same=1) (f433cc69...)
+        [Expert Info (Chat/Security): Used learnt encTicketPart_key in frame 4 keytype 20 (id=4.1 same=1) (f433cc69...)]
+            [Used learnt encTicketPart_key in frame 4 keytype 20 (id=4.1 same=1) (f433cc69...)]
+            [Severity level: Chat]
+            [Group: Security]
+        [Expert Info (Chat/Security): Used learnt encTicketPart_key in frame 5 keytype 20 (id=5.1 same=0) (f433cc69...)]
+            [Used learnt encTicketPart_key in frame 5 keytype 20 (id=5.1 same=0) (f433cc69...)]
+            [Severity level: Chat]
+            [Group: Security]
+    Used derived KrbFastReq_TGS_armorKey in frame 5 keytype 20 (id=5.3 same=0) (01750ba9...)
+        [Expert Info (Chat/Security): Used derived KrbFastReq_TGS_armorKey in frame 5 keytype 20 (id=5.3 same=0) (01750ba9...)]
+            [Used derived KrbFastReq_TGS_armorKey in frame 5 keytype 20 (id=5.3 same=0) (01750ba9...)]
+            [Severity level: Chat]
+            [Group: Security]
+        [Expert Info (Chat/Security): SRC1 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+            [SRC1 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+            [Severity level: Chat]
+            [Group: Security]
+        [Expert Info (Chat/Security): SRC2 learnt encTicketPart_key in frame 4 keytype 20 (id=4.1 same=1) (f433cc69...)]
+            [SRC2 learnt encTicketPart_key in frame 4 keytype 20 (id=4.1 same=1) (f433cc69...)]
+            [Severity level: Chat]
+            [Group: Security]
+```
+
+TGT-REP
+```
+Frame 6: 1199 bytes on wire (9592 bits), 1199 bytes captured (9592 bits) on interface lo, id 1
+Ethernet II, Src: 00:00:00_00:00:00 (00:00:00:00:00:00), Dst: 00:00:00_00:00:00 (00:00:00:00:00:00)
+Internet Protocol Version 4, Src: 127.0.0.1, Dst: 127.0.0.1
+User Datagram Protocol, Src Port: 88, Dst Port: 60191
+Kerberos
+    tgs-rep
+        pvno: 5
+        msg-type: krb-tgs-rep (13)
+        padata: 1 item
+            PA-DATA pA-FX-FAST
+                padata-type: pA-FX-FAST (136)
+                    padata-value […]: a081e33081e0a081dd3081daa003020114a281d20481cfb46faf963b97dc0917a7d2ad18cce7e0d09b1a98fff74be22f8bf5f6861d6a58ba2b51a73439b0cae2e4af43e0643a3d858bf0e9e5a8369a6a6bf5cf575404dc56827df248ca58bf74b4634e4c7d739738457791efd6d
+                        armored-data
+                            enc-fast-rep
+                                etype: eTYPE-AES256-CTS-HMAC-SHA384-192 (20)
+                                cipher […]: b46faf963b97dc0917a7d2ad18cce7e0d09b1a98fff74be22f8bf5f6861d6a58ba2b51a73439b0cae2e4af43e0643a3d858bf0e9e5a8369a6a6bf5cf575404dc56827df248ca58bf74b4634e4c7d739738457791efd6d1bf62192f53117ada498cb1fe9e7cfde7749b4f4a588406a1e15
+                                    Decrypted keytype 20 usage 52 using derived KrbFastReq_TGS_armorKey in frame 5 (id=5.3 same=0) (01750ba9...)
+                                        [Expert Info (Chat/Security): Decrypted keytype 20 usage 52 using derived KrbFastReq_TGS_armorKey in frame 5 (id=5.3 same=0) (01750ba9...)]
+                                            [Decrypted keytype 20 usage 52 using derived KrbFastReq_TGS_armorKey in frame 5 (id=5.3 same=0) (01750ba9...)]
+                                            [Severity level: Chat]
+                                            [Group: Security]
+                                        [Expert Info (Chat/Security): Used keymap=all_keys num_keys=49 num_tries=12)]
+                                            [Used keymap=all_keys num_keys=49 num_tries=12)]
+                                            [Severity level: Chat]
+                                            [Group: Security]
+                                        [Expert Info (Chat/Security): SRC1 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+                                            [SRC1 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+                                            [Severity level: Chat]
+                                            [Group: Security]
+                                        [Expert Info (Chat/Security): SRC2 learnt encTicketPart_key in frame 4 keytype 20 (id=4.1 same=1) (f433cc69...)]
+                                            [SRC2 learnt encTicketPart_key in frame 4 keytype 20 (id=4.1 same=1) (f433cc69...)]
+                                            [Severity level: Chat]
+                                            [Group: Security]
+                                    padata: 0 items
+                                    strengthen-key
+                                        Learnt KrbFastResponse_strengthen-key keytype 20 (id=6.1) (8d415f8f...)
+                                            [Expert Info (Chat/Security): Learnt KrbFastResponse_strengthen-key keytype 20 (id=6.1) (8d415f8f...)]
+                                                [Learnt KrbFastResponse_strengthen-key keytype 20 (id=6.1) (8d415f8f...)]
+                                                [Severity level: Chat]
+                                                [Group: Security]
+                                        keytype: 20
+                                        keyvalue: 8d415f8f470cd0a90771bbc1517b758b88389a5224564e7f2a41b98ee966a3b1
+                                    finished
+                                        timestamp: Sep 19, 2025 12:33:14.000000000 BST
+                                        usec: 253394
+                                        crealm: MINDFRUIT.KRB
+                                        cname
+                                            name-type: kRB5-NT-PRINCIPAL (1)
+                                            name-string: 1 item
+                                                KerberosString: michaelg
+                                        ticket-checksum
+                                            cksumtype: cKSUMTYPE-HMAC-SHA384-192-AES256 (20)
+                                            checksum: 50d4412d25d18f0dc55ea4133ec2c6514684fc3b7c55419c
+                                    nonce: 812528889
+        crealm: MINDFRUIT.KRB
+        cname
+            name-type: kRB5-NT-PRINCIPAL (1)
+            cname-string: 1 item
+                CNameString: michaelg
+        ticket
+            tkt-vno: 5
+            realm: MINDFRUIT.KRB
+            sname
+                name-type: kRB5-NT-SRV-HST (3)
+                sname-string: 2 items
+                    SNameString: HTTP
+                    SNameString: fedora
+            enc-part
+                etype: eTYPE-AES256-CTS-HMAC-SHA384-192 (20)
+                kvno: 1
+                cipher […]: 46a2d172dfaf8bf35e5b0b47fd1113b7ff60243c6e1aa3aa14e2b26d71968625ad241dd1c39a2077cfea0c0652407e202e4cedb127e430e272eb9dd4eda17146b667701e4bc19f6e482afaccaf6ad148a9406b65ce4cf37373a47b67e13f6b199d80c9b1160f0dcb24a01062641e87307
+                    Decrypted keytype 20 usage 2 using keytab principal HTTP/fedora@MINDFRUIT.KRB (id=keytab.1 same=0) (6e9da1ef...)
+                        [Expert Info (Chat/Security): Decrypted keytype 20 usage 2 using keytab principal HTTP/fedora@MINDFRUIT.KRB (id=keytab.1 same=0) (6e9da1ef...)]
+                            [Decrypted keytype 20 usage 2 using keytab principal HTTP/fedora@MINDFRUIT.KRB (id=keytab.1 same=0) (6e9da1ef...)]
+                            [Severity level: Chat]
+                            [Group: Security]
+                        [Expert Info (Chat/Security): Used keymap=all_keys num_keys=49 num_tries=6)]
+                            [Used keymap=all_keys num_keys=49 num_tries=6)]
+                            [Severity level: Chat]
+                            [Group: Security]
+                    encTicketPart
+                        Padding: 0
+                        flags: 40a90000
+                            0... .... = reserved: False
+                            .1.. .... = forwardable: True
+                            ..0. .... = forwarded: False
+                            ...0 .... = proxiable: False
+                            .... 0... = proxy: False
+                            .... .0.. = may-postdate: False
+                            .... ..0. = postdated: False
+                            .... ...0 = invalid: False
+                            1... .... = renewable: True
+                            .0.. .... = initial: False
+                            ..1. .... = pre-authent: True
+                            ...0 .... = hw-authent: False
+                            .... 1... = transited-policy-checked: True
+                            .... .0.. = ok-as-delegate: False
+                            .... ..0. = unused: False
+                            .... ...1 = enc-pa-rep: True
+                            0... .... = anonymous: False
+                        key
+                            Learnt encTicketPart_key keytype 20 (id=6.2) (02967044...)
+                                [Expert Info (Chat/Security): Learnt encTicketPart_key keytype 20 (id=6.2) (02967044...)]
+                                    [Learnt encTicketPart_key keytype 20 (id=6.2) (02967044...)]
+                                    [Severity level: Chat]
+                                    [Group: Security]
+                            keytype: 20
+                            keyvalue: 0296704494676b9937795e5ea9a9d9b46fa154f1a482414b0e9d110fe432c41c
+                        crealm: MINDFRUIT.KRB
+                        cname
+                            name-type: kRB5-NT-PRINCIPAL (1)
+                            cname-string: 1 item
+                                CNameString: michaelg
+                        transited
+                            tr-type: 1
+                            contents: <MISSING>
+                        authtime: Sep 19, 2025 12:33:14.000000000 BST
+                        endtime: Sep 20, 2025 12:33:14.000000000 BST
+                        renew-till: Sep 19, 2025 12:33:14.000000000 BST
+                        authorization-data: 1 item
+                            AuthorizationData item
+                                ad-type: aD-IF-RELEVANT (1)
+                                ad-data […]: 3082010830820104a00402020080a181fb0481f805000000000000000a0000001a0000005800000000000000100000001c0000007800000000000000060000001c0000009800000000000000070000001c000000b800000000000000130000001c000000d80000000000000000b97f2f
+                                    AuthorizationData item
+                                        ad-type: aD-WIN2K-PAC (128)
+                                        ad-data […]: 05000000000000000a0000001a0000005800000000000000100000001c0000007800000000000000060000001c0000009800000000000000070000001c000000b800000000000000130000001c000000d80000000000000000b97f2f5929dc0110006d00690063006800610065006c00
+                                            Verified Server checksum 20 keytype 20 using keytab principal HTTP/fedora@MINDFRUIT.KRB (id=keytab.1 same=0) (6e9da1ef...)
+                                                [Expert Info (Chat/Security): Verified Server checksum 20 keytype 20 using keytab principal HTTP/fedora@MINDFRUIT.KRB (id=keytab.1 same=0) (6e9da1ef...)]
+                                                    [Verified Server checksum 20 keytype 20 using keytab principal HTTP/fedora@MINDFRUIT.KRB (id=keytab.1 same=0) (6e9da1ef...)]
+                                                    [Severity level: Chat]
+                                                    [Group: Security]
+                                                [Expert Info (Chat/Security): Used keymap=all_keys num_keys=49 num_tries=6)]
+                                                    [Used keymap=all_keys num_keys=49 num_tries=6)]
+                                                    [Severity level: Chat]
+                                                    [Group: Security]
+                                            Verified KDC checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)
+                                                [Expert Info (Chat/Security): Verified KDC checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)]
+                                                    [Verified KDC checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)]
+                                                    [Severity level: Chat]
+                                                    [Group: Security]
+                                                [Expert Info (Chat/Security): Used keymap=longterm_keys num_keys=43 num_tries=2)]
+                                                    [Used keymap=longterm_keys num_keys=43 num_tries=2)]
+                                                    [Severity level: Chat]
+                                                    [Group: Security]
+                                            Verified Ticket checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)
+                                                [Expert Info (Chat/Security): Verified Ticket checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)]
+                                                    [Verified Ticket checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)]
+                                                    [Severity level: Chat]
+                                                    [Group: Security]
+                                                [Expert Info (Chat/Security): Used keymap=kdc_checksum_key num_keys=1 num_tries=1)]
+                                                    [Used keymap=kdc_checksum_key num_keys=1 num_tries=1)]
+                                                    [Severity level: Chat]
+                                                    [Group: Security]
+                                            Verified Full PAC checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)
+                                                [Expert Info (Chat/Security): Verified Full PAC checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)]
+                                                    [Verified Full PAC checksum 20 keytype 20 using keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB (id=keytab.30 same=0) (b2446b78...)]
+                                                    [Severity level: Chat]
+                                                    [Group: Security]
+                                                [Expert Info (Chat/Security): Used keymap=kdc_checksum_key num_keys=1 num_tries=1)]
+                                                    [Used keymap=kdc_checksum_key num_keys=1 num_tries=1)]
+                                                    [Severity level: Chat]
+                                                    [Group: Security]
+                                            Num Entries: 5
+                                            Version: 0
+                                            Type: Client Info Type (10)
+                                                Size: 26
+                                                Offset: 88
+                                                PAC_CLIENT_INFO_TYPE: 00b97f2f5929dc0110006d00690063006800610065006c006700
+                                                    ClientID: Sep 19, 2025 12:33:14.000000000 BST
+                                                    Name Length: 16
+                                                    Name: michaelg
+                                            Type: Ticket Checksum (16)
+                                                Size: 28
+                                                Offset: 120
+                                                PAC_TICKET_CHECKSUM: 1400000039976e5f119cb0149ad7b73f5908103028d22191c634742d
+                                                    Type: 20
+                                                    Signature: 39976e5f119cb0149ad7b73f5908103028d22191c634742d
+                                            Type: Server Checksum (6)
+                                                Size: 28
+                                                Offset: 152
+                                                PAC_SERVER_CHECKSUM: 140000008f9112ad20b0dfee8b5dbbc89ce0e8434728a3eb02036959
+                                                    Type: 20
+                                                    Signature: 8f9112ad20b0dfee8b5dbbc89ce0e8434728a3eb02036959
+                                            Type: Privsvr Checksum (7)
+                                                Size: 28
+                                                Offset: 184
+                                                PAC_PRIVSVR_CHECKSUM: 140000007990de2a5b6d7768999f551fe9319a2c2d54c5c4b0682e5d
+                                                    Type: 20
+                                                    Signature: 7990de2a5b6d7768999f551fe9319a2c2d54c5c4b0682e5d
+                                            Type: Full Checksum (19)
+                                                Size: 28
+                                                Offset: 216
+                                                PAC_FULL_CHECKSUM: 140000005468308eeb01e54e63368117bcedfd16e1705227b8cbb842
+                                                    Type: 20
+                                                    Signature: 5468308eeb01e54e63368117bcedfd16e1705227b8cbb842
+        enc-part
+            etype: eTYPE-AES256-CTS-HMAC-SHA384-192 (20)
+            cipher […]: 5d1c504e72979eae441de3ba450291ed51b205438fd28c1518c403decb192ec1d329271d7a9f1fe97bd03e50aaed29c012ff6eae44ac6f3350db6bfd10aad09a5408f56ca9416c264c1d5cb253572419c9d7f6a1a13ffd0806d9f9080692987009355e2778c6ecebab8073ae909477016
+                Derived strengthen-reply-key keytype 20 (id=6.3) (d69223ea...)
+                    [Expert Info (Chat/Security): Derived strengthen-reply-key keytype 20 (id=6.3) (d69223ea...)]
+                        [Derived strengthen-reply-key keytype 20 (id=6.3) (d69223ea...)]
+                        [Severity level: Chat]
+                        [Group: Security]
+                    [Expert Info (Chat/Security): SRC1 learnt KrbFastResponse_strengthen-key in frame 6 keytype 20 (id=6.1 same=0) (8d415f8f...)]
+                        [SRC1 learnt KrbFastResponse_strengthen-key in frame 6 keytype 20 (id=6.1 same=0) (8d415f8f...)]
+                        [Severity level: Chat]
+                        [Group: Security]
+                    [Expert Info (Chat/Security): SRC2 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+                        [SRC2 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+                        [Severity level: Chat]
+                        [Group: Security]
+                Decrypted keytype 20 usage 9 using derived strengthen-reply-key in frame 6 (id=6.3 same=0) (d69223ea...)
+                    [Expert Info (Chat/Security): Decrypted keytype 20 usage 9 using derived strengthen-reply-key in frame 6 (id=6.3 same=0) (d69223ea...)]
+                        [Decrypted keytype 20 usage 9 using derived strengthen-reply-key in frame 6 (id=6.3 same=0) (d69223ea...)]
+                        [Severity level: Chat]
+                        [Group: Security]
+                    [Expert Info (Chat/Security): Used keymap=all_keys num_keys=49 num_tries=13)]
+                        [Used keymap=all_keys num_keys=49 num_tries=13)]
+                        [Severity level: Chat]
+                        [Group: Security]
+                    [Expert Info (Chat/Security): SRC1 learnt KrbFastResponse_strengthen-key in frame 6 keytype 20 (id=6.1 same=0) (8d415f8f...)]
+                        [SRC1 learnt KrbFastResponse_strengthen-key in frame 6 keytype 20 (id=6.1 same=0) (8d415f8f...)]
+                        [Severity level: Chat]
+                        [Group: Security]
+                    [Expert Info (Chat/Security): SRC2 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+                        [SRC2 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+                        [Severity level: Chat]
+                        [Group: Security]
+                encTGSRepPart
+                    key
+                        Learnt encTGSRepPart_key keytype 20 (id=6.4) (02967044...)
+                            [Expert Info (Chat/Security): Learnt encTGSRepPart_key keytype 20 (id=6.4) (02967044...)]
+                                [Learnt encTGSRepPart_key keytype 20 (id=6.4) (02967044...)]
+                                [Severity level: Chat]
+                                [Group: Security]
+                        keytype: 20
+                        keyvalue: 0296704494676b9937795e5ea9a9d9b46fa154f1a482414b0e9d110fe432c41c
+                    last-req: 1 item
+                        LastReq item
+                            lr-type: lR-NONE (0)
+                            lr-value: Jan  1, 1970 01:00:00.000000000 BST
+                    nonce: 812528889
+                    Padding: 0
+                    flags: 40a90000
+                        0... .... = reserved: False
+                        .1.. .... = forwardable: True
+                        ..0. .... = forwarded: False
+                        ...0 .... = proxiable: False
+                        .... 0... = proxy: False
+                        .... .0.. = may-postdate: False
+                        .... ..0. = postdated: False
+                        .... ...0 = invalid: False
+                        1... .... = renewable: True
+                        .0.. .... = initial: False
+                        ..1. .... = pre-authent: True
+                        ...0 .... = hw-authent: False
+                        .... 1... = transited-policy-checked: True
+                        .... .0.. = ok-as-delegate: False
+                        .... ..0. = unused: False
+                        .... ...1 = enc-pa-rep: True
+                        0... .... = anonymous: False
+                    authtime: Sep 19, 2025 12:33:14.000000000 BST
+                    endtime: Sep 20, 2025 12:33:14.000000000 BST
+                    renew-till: Sep 19, 2025 12:33:14.000000000 BST
+                    srealm: MINDFRUIT.KRB
+                    sname
+                        name-type: kRB5-NT-SRV-HST (3)
+                        sname-string: 2 items
+                            SNameString: HTTP
+                            SNameString: fedora
+    [Response to: 5]
+    [Time from request: 0.000791655 seconds]
+    Provides learnt KrbFastResponse_strengthen-key in frame 6 keytype 20 (id=6.1 same=0) (8d415f8f...)
+        [Expert Info (Chat/Security): Provides learnt KrbFastResponse_strengthen-key in frame 6 keytype 20 (id=6.1 same=0) (8d415f8f...)]
+            [Provides learnt KrbFastResponse_strengthen-key in frame 6 keytype 20 (id=6.1 same=0) (8d415f8f...)]
+            [Severity level: Chat]
+            [Group: Security]
+    Provides learnt encTicketPart_key in frame 6 keytype 20 (id=6.2 same=0) (02967044...)
+        [Expert Info (Chat/Security): Provides learnt encTicketPart_key in frame 6 keytype 20 (id=6.2 same=0) (02967044...)]
+            [Provides learnt encTicketPart_key in frame 6 keytype 20 (id=6.2 same=0) (02967044...)]
+            [Severity level: Chat]
+            [Group: Security]
+    Provides derived strengthen-reply-key in frame 6 keytype 20 (id=6.3 same=0) (d69223ea...)
+        [Expert Info (Chat/Security): Provides derived strengthen-reply-key in frame 6 keytype 20 (id=6.3 same=0) (d69223ea...)]
+            [Provides derived strengthen-reply-key in frame 6 keytype 20 (id=6.3 same=0) (d69223ea...)]
+            [Severity level: Chat]
+            [Group: Security]
+        [Expert Info (Chat/Security): SRC1 learnt KrbFastResponse_strengthen-key in frame 6 keytype 20 (id=6.1 same=0) (8d415f8f...)]
+            [SRC1 learnt KrbFastResponse_strengthen-key in frame 6 keytype 20 (id=6.1 same=0) (8d415f8f...)]
+            [Severity level: Chat]
+            [Group: Security]
+        [Expert Info (Chat/Security): SRC2 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+            [SRC2 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+            [Severity level: Chat]
+            [Group: Security]
+    Provides learnt encTGSRepPart_key in frame 6 keytype 20 (id=6.4 same=0) (02967044...)
+        [Expert Info (Chat/Security): Provides learnt encTGSRepPart_key in frame 6 keytype 20 (id=6.4 same=0) (02967044...)]
+            [Provides learnt encTGSRepPart_key in frame 6 keytype 20 (id=6.4 same=0) (02967044...)]
+            [Severity level: Chat]
+            [Group: Security]
+    Used derived KrbFastReq_TGS_armorKey in frame 5 keytype 20 (id=5.3 same=0) (01750ba9...)
+        [Expert Info (Chat/Security): Used derived KrbFastReq_TGS_armorKey in frame 5 keytype 20 (id=5.3 same=0) (01750ba9...)]
+            [Used derived KrbFastReq_TGS_armorKey in frame 5 keytype 20 (id=5.3 same=0) (01750ba9...)]
+            [Severity level: Chat]
+            [Group: Security]
+        [Expert Info (Chat/Security): SRC1 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+            [SRC1 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+            [Severity level: Chat]
+            [Group: Security]
+        [Expert Info (Chat/Security): SRC2 learnt encTicketPart_key in frame 4 keytype 20 (id=4.1 same=1) (f433cc69...)]
+            [SRC2 learnt encTicketPart_key in frame 4 keytype 20 (id=4.1 same=1) (f433cc69...)]
+            [Severity level: Chat]
+            [Group: Security]
+    Used keytab principal HTTP/fedora@MINDFRUIT.KRB keytype 20 (id=keytab.1 same=0) (6e9da1ef...)
+        [Expert Info (Chat/Security): Used keytab principal HTTP/fedora@MINDFRUIT.KRB keytype 20 (id=keytab.1 same=0) (6e9da1ef...)]
+            [Used keytab principal HTTP/fedora@MINDFRUIT.KRB keytype 20 (id=keytab.1 same=0) (6e9da1ef...)]
+            [Severity level: Chat]
+            [Group: Security]
+    Used keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB keytype 20 (id=keytab.30 same=0) (b2446b78...)
+        [Expert Info (Chat/Security): Used keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB keytype 20 (id=keytab.30 same=0) (b2446b78...)]
+            [Used keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB keytype 20 (id=keytab.30 same=0) (b2446b78...)]
+            [Severity level: Chat]
+            [Group: Security]
+    Used derived strengthen-reply-key in frame 6 keytype 20 (id=6.3 same=0) (d69223ea...)
+        [Expert Info (Chat/Security): Used derived strengthen-reply-key in frame 6 keytype 20 (id=6.3 same=0) (d69223ea...)]
+            [Used derived strengthen-reply-key in frame 6 keytype 20 (id=6.3 same=0) (d69223ea...)]
+            [Severity level: Chat]
+            [Group: Security]
+        [Expert Info (Chat/Security): SRC1 learnt KrbFastResponse_strengthen-key in frame 6 keytype 20 (id=6.1 same=0) (8d415f8f...)]
+            [SRC1 learnt KrbFastResponse_strengthen-key in frame 6 keytype 20 (id=6.1 same=0) (8d415f8f...)]
+            [Severity level: Chat]
+            [Group: Security]
+        [Expert Info (Chat/Security): SRC2 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+            [SRC2 learnt authenticator_subkey in frame 5 keytype 20 (id=5.2 same=0) (5b29f8aa...)]
+            [Severity level: Chat]
+            [Group: Security]
+```
+
+------------------------------------------8<----8<------------------------------------------------
+Google Chrome Notes On Websocket 401 Handling
+---------------------------------------------
+
+https://docs.google.com/document/d/129rLtf5x3hvhP5rayLiSxnEjOXS8Z7EnLJgBL4CdwjI/edit?tab=t.0
+
+RFC 7235
+--------
+All HTTP comms are assumed to be stateless. 
+Firefox seems to be closing the connection each time we send a 401 response; we see the FIN and RST 
+in Wireshark.
+https://www.rfc-editor.org/rfc/rfc7235#section-5.1.2
+Via https://stackoverflow.com/a/25235099
+
+Reading from /dev/urandom
+-------------------------
+https://serverfault.com/a/481171
+head -c 500 /dev/urandom | tr -dc 'a-zA-Z0-9~!@#$%^&*_-' | fold -w 3
+
+Sibling comment
+od -vAn -N4 -tu4 < /dev/urandom
+txt:(raze system"od -vAn -N32 -tu8 < /dev/urandom") except " "

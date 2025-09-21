@@ -25,7 +25,6 @@
  }
 //--------------------------------------------------------------------------- .utl
 .utl.init:{
-  .utl.zw:{.z.w}
  ;.z.pc:.utl.zpc
  ;.z.po:.utl.zpo
  ;.utl.conns:1!flip`fd`usr`since!"ISP"$\:()
@@ -33,6 +32,9 @@
  ;.utl.zpcCbks:()
  ;.utl.zpoCbks:()
  }
+
+.utl.zw:{.z.w}
+.utl.zP:{.z.P}
 
 .utl.zpo:{[H]
   .log.debug("Have socket-open event for FD ";H)
@@ -54,27 +56,23 @@
 .krb.init:{
   dso:hsym`$getenv[`PWD],"/lib/libmgkrb5"
  ;.krb.acceptSecCtx:dso 2: (`mg_accept_sec_context;2)
- ;.krb.initSecCtx:  dso 2: (`mg_init_sec_context;3) // src_name, tgt_name, context
- ;.krb.conns:1!flip`fd`ctx`src`tgt`xpy!"IJ**P"$\:()
+ ;.krb.initSecCtx:  dso 2: (`mg_init_sec_context;2)
+ ;.krb.conns:1!flip`fd`ctx`src`tgt`xpy!"I***P"$\:()
  ;.z.pw:.krb.zpw
  }
 
-.krb.getUserForConn:{[H]
-  exec first src from .krb.conns where fd = H
- }
-
-// X: GSS context pointer -7h; S: src-name 10h; T: tgt-name 10h; V: seconds TTL -6h
-.krb.addUserForConn:{[X;S;T;V]
+// S: src-name 10h; T: tgt-name 10h; V: seconds TTL -6h
+.krb.addUserForConn:{[S;T;V]
   cfd:.utl.zw[]
  ;.log.info("authenticated user ";S;" for service ";T;" on FD ";cfd)
  ;xpy:.z.P + 18h$V
- ;`.krb.conns upsert (cfd;X;S;T;xpy)
- ;(1b;S)
+ ;`.krb.conns upsert (cfd;4h$();S;T;xpy)
+ ;(1b;S;T;V)
  }
 
 .krb.stashCtx:{[X;M]
   cfd:.utl.zw[]
- ;.log.debug("Storing intermediate context pending further Client data on FD ";cfd)
+ ;.log.debug("storing intermediate context pending further Client data on FD ";cfd)
  ;`.krb.conns upsert (cfd;X;"";"";0Np)
  ;(0b;M)
  }
@@ -85,29 +83,25 @@
  }
 
 .krb.doKrb5Auth:{[T]
-  // TODO lookoup any existing context-pointer and pass to gss_accept_sec_context
-  ctx:$[exec count ctx from .krb.conns where fd = .utl.zw[]
-       ;exec first ctx from .krb.conns where fd = .utl.zw[]
-       ;0Nj
-       ]
- ;.log.debug("Calling acceptSecCtx with context arg ";.Q.s1 ctx)
+  ctx:exec first ctx from .krb.conns where fd = .utl.zw[]
+ ;.log.debug("calling .krb.acceptSecCtx with ";$[not count ctx;"null context arg";"context arg ",.Q.s1 ctx])
  ;res:.[.krb.acceptSecCtx;(trim T;ctx);.krb.onAcceptSecCtxFail]
- ;.log.debug("libmgkrb5 authentication response is ";.Q.s1 res)
+ ;.log.debug("krb5 authentication response is ";.Q.s1 res)
  ;$[not 0h~type res
    ;0b
    ;not count res
    ;0b
-   ;1i~res 0      // auth complete, should be a 4-element list (1i;src_name;tgt_name;context_ptr;validity_secs_i)
-   ;.krb.addUserForConn . res 3 1 2 4
-   ;2i~res 0      // auth incomplte, should be a 3-element list (2i;context_ptr;b64_encoded_msg)
-   ;.krb.stashCtx . res 1 2
+   ;1i~res 0      // auth complete, res is a 4-element list (1i;src_name;tgt_name;validity_secs_i)
+   ;.krb.addUserForConn . 1_ res
+   ;2i~res 0      // auth incomplte, res is a 3-element list (2i;context_ptr;b64_encoded_msg)
+   ;.krb.stashCtx . 1_ res
    ;0b
    ]
  }
 
 .krb.doKrbPwAuth:{[U;P]
-  .log.debug("authenticating user ";U;"; password.length is ";count P)
- ;first res:.krb.doKrb5Auth P
+  .log.debug("authenticating IPC connetion for user ";U;" with .rkb.doKrb5Auth over password of length ";count P)
+ ;first .krb.doKrb5Auth P
  }
 
 .krb.zpw:{[U;P]
@@ -124,8 +118,7 @@
  ;tgt:"HTTP/fedora@MINDFRUIT.KRB"
  ;H:""
  ;P:30097
- ;ctx:0Nj
- ;if[not 1i~first res:.krb.initSecCtx[src;tgt;ctx]
+ ;if[not 1i~first res:.krb.initSecCtx[src;tgt]
     ;'"failed to initialise krb5 context"
     ]
  ;hopen `$":",":"sv(H;string P;string .z.u;res 1)
@@ -138,11 +131,15 @@
  ;.krb.init[]
  ;.h.HOME:getenv[`PWD],"/html"
  ;.z.ac:.web.zac
+ ;.z.ph:.web.zph
  ;.z.wo:.web.zwo
  ;.z.wc:.web.zwc
  ;.z.ws:.web.zws
  ;.web.reqs:()
+ ;.web.cookies:1!flip`user`validity`data!enlist each ("";0Np;"")
  ;.web.http401:(0;"")
+ ;.web.http404:.h.hn["404 Not Found";`txt;""]
+ ;.web.keksNom:"some_cookie_name"
  ;1b
  }
 
@@ -160,23 +157,86 @@
   first system "TZ=GMT date '+%a, %d %b %Y %H:%M:%S %Z'"
  }
 
+// F: -11h file hsym; Y: 10h Content-Type
+.web.sendContent:{[F]
+  .log.debug("Serving file ";F)
+ ;res:"c"$@[1::;F;""]
+ ;res:("HTTP/1.1 200 OK"
+      ;"Content-Type: ",.h.ty`$last"."vs string F
+      ;"Connection: keep-alive"
+      ;"Date: ",.web.fmtHttpDate[]
+      ;"Server: ",first system"hostname"
+      ;""
+      ;res
+      )
+ ;"\r\n"sv res
+ }
+
+.web.txFile:{[F]
+  $[""~F
+   ;"index.html"
+   ;"favicon.ico"~F
+   ;"favicon.png"
+   ;F
+   ]
+ }
+
+.web.zph:{[T]
+  .log.debug("Have GET request for ";T 0)
+ ;$[-11h~type key fle:`$":",.h.HOME,"/",.web.txFile T 0
+   ;.web.sendContent fle
+   ;.web.http404
+   ]
+ }
+
+// https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie
+// Don't set Expires, so we get a session cookie; we could set when the Kereros token expires,
+// of course. Don't set Domain, so we get string domain binding. 
+// We could do so much better, e.g. different cookie names for different stages of the 
+// authentication pipeline, deleting cookies as we go, rotating values on each new 401 
+// response, eventually, once we hit .z.ph, removing the previous session cookie and 
+// replacing it with one which expires when the Kerberos token expires ... but that is
+// left for another day.
+.web.getCookie:{
+  .web.keksNom,"=",raze system"od -vAn -N64 -tx1 /dev/urandom | sed 's/ //g'"
+ }
+
 // B: SPNEGO base64 data as char-vec (or the empty vec "")
-.web.genKrb5Challenge:{[B]
-  $[count B
+.web.genKrb5Challenge:{[H;B]
+  cuk:.web.getCookie[]
+ ;$[count B
    ;.log.debug("Issuing WWW-Authenticate reply on FD ";.utl.zw[];"; SNPEGO data provided, length ";count B)
-   ;.log.debug("Issuing initial WWW-Authenticate challenge on FD ";.utl.zw[])
+   ;.log.debug("Issuing initial WWW-Authenticate challenge on FD ";.utl.zw[];"; cookie begins ";50#cuk)
    ]
  ;txt:("HTTP/1.1 401 Unauthorized"
       ;"WWW-Authenticate: Negotiate",$[count B;" ",B;""]
-      //;"Content-Type: text/html"
+      ;"Content-Type: text/html"
       ;"Content-Length: 0"
-      ;"Connection: keep-alive"
+      ;"Connection: ",.h.ka 601000i
+      //;"Set-Cookie: ",cuk
       ;"Date: ",.web.fmtHttpDate[]
       ;"Server: ",first system"hostname"
       ;"";"")
  ;"\r\n"sv txt
  }
 
+// K: cookie 10h; C: client 10h; S: service 10h; T: seconds TTL -6h
+.web.blessConn:{[K;C;S;T]
+//   .log.debug("blessConn: ";T;" ";$[50<count K;50#K;K])
+//  ;if[K like .web.keksNom,"*"
+//     ;`.web.cookies upsert (C;.utl.zP[] + 18h$T;K)
+//     ]
+ ;.web.userOk C
+ }
+
+// .web.cookieAuthOk:{[K]
+//   $[count tbl:select user from .web.cookies where data~\:K
+//    ;[.log.debug("Have valid cookie-auth for user ";first tbl`user;" with cookie ";50#K)
+//     ;(1b;first tbl`user)
+//     ]
+//    ;0b
+//    ]
+//  }
 // T is a two-element tuple, of request text and headers; the latter is a dict. The
 // function must return a two-element list, whose first element is in the set {0, 1, 2, 4}.
 // 0j generates a 401 not-authorized response.
@@ -193,27 +253,28 @@
 //   S: WWW-Authenticate: Negotiate 749efa7b23409c20b92356
 // The context will need to be preserved between client messages.
 .web.zac:{[T]
-  .log.debug(".z.ac authentication requested for FD ";.utl.zw[])
+  .log.debug("HTTP auth required for FD ";.utl.zw[])
  ;txt:T 0
  ;hdr:T 1
  ;.web.reqs,:enlist T
- ;tup:$[$[10h~type usr:.krb.getUserForConn .utl.zw[];count usr;0b]
-       ;.web.userOk usr
-       ;""~tkn:hdr`Authorization
-       ;.web.customRps .web.genKrb5Challenge ""
+ //;tup:$[1b~first tag:.web.cookieAuthOk hdr`Cookie
+ //      ;.web.userOk tag 1
+ ;tup:$[""~tkn:hdr`Authorization
+       ;.web.customRps .web.genKrb5Challenge[hdr;""]
        ;not tkn like "Negotiate YII*"
        ;.web.http401
        ;0b~res:.krb.doKrb5Auth (count "Negotiate ")_ tkn
        ;.web.http401
        ;1b~res 0
-       ;.web.userOk res 1
+       ;.web.blessConn . @[res;0;:;hdr`Cookie]
        ;0b~res 0
-       ;.web.customRps .web.genKrb5Challenge res 1
+       ;.web.customRps .web.genKrb5Challenge[hdr;res 1]
        ;.web.http401
        ]
- ;.log.debug(".z.ac result is ";.Q.s1 tup)
+ ;.log.debug(".z.ac result is (";tup 0;";";$[2=tup 0;first"\r\n"vs tup 1;tup 1];")")
  ;tup
  }
+//.web.zac:{[F;T] .Q.trp[F;T;{.log.error(x;":\n";.Q.sbt y)}]}.web.zac
 
 .web.zwo:{[H]
   .log.debug("Have websocket-open on FD ";H)
@@ -234,3 +295,4 @@
     ]
   }
 .web.init[];
+
