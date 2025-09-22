@@ -113,15 +113,16 @@
    ]
  }
 
+// H: hostname -11h; P: port any neg 5 6 7h; S: Client src_name with realm 10h;
+// T: target Service name with realm 10h
+// e.g. for localhost:
+// rfd:.krb.kopen . (`;30097;"michaelg@MINDFRUIT.KRB";"HTTP/fedora@MINDFRUIT.KRB")
+// On success, returns a normal IPC file descriptor.
 .krb.kopen:{[H;P;S;T]
-  src:"michaelg@MINDFRUIT.KRB"
- ;tgt:"HTTP/fedora@MINDFRUIT.KRB"
- ;H:""
- ;P:30097
- ;if[not 1i~first res:.krb.initSecCtx[src;tgt]
+  if[not 1i~first res:.krb.initSecCtx[S;T]
     ;'"failed to initialise krb5 context"
     ]
- ;hopen `$":",":"sv(H;string P;string .z.u;res 1)
+ ;hopen `$":",":"sv(string H;string P;string .z.u;res 1)
  }
 
 .krb.init[];
@@ -147,7 +148,7 @@
   (1;U)
  }
 
-.web.customRps:{[M]
+.web.customRep:{[M]
   (2;M)
  }
 
@@ -164,6 +165,7 @@
  ;res:("HTTP/1.1 200 OK"
       ;"Content-Type: ",.h.ty`$last"."vs string F
       ;"Connection: keep-alive"
+      ;"Connection-Length: ",string count res
       ;"Date: ",.web.fmtHttpDate[]
       ;"Server: ",first system"hostname"
       ;""
@@ -172,6 +174,7 @@
  ;"\r\n"sv res
  }
 
+// Translate requests for file F (10h) on-the-fly
 .web.txFile:{[F]
   $[""~F
    ;"index.html"
@@ -189,54 +192,37 @@
    ]
  }
 
-// https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie
-// Don't set Expires, so we get a session cookie; we could set when the Kereros token expires,
-// of course. Don't set Domain, so we get string domain binding. 
-// We could do so much better, e.g. different cookie names for different stages of the 
-// authentication pipeline, deleting cookies as we go, rotating values on each new 401 
-// response, eventually, once we hit .z.ph, removing the previous session cookie and 
-// replacing it with one which expires when the Kerberos token expires ... but that is
-// left for another day.
-.web.getCookie:{
-  .web.keksNom,"=",raze system"od -vAn -N64 -tx1 /dev/urandom | sed 's/ //g'"
- }
-
 // B: SPNEGO base64 data as char-vec (or the empty vec "")
 .web.genKrb5Challenge:{[H;B]
-  cuk:.web.getCookie[]
- ;$[count B
+  $[count B
    ;.log.debug("Issuing WWW-Authenticate reply on FD ";.utl.zw[];"; SNPEGO data provided, length ";count B)
-   ;.log.debug("Issuing initial WWW-Authenticate challenge on FD ";.utl.zw[];"; cookie begins ";50#cuk)
+   ;.log.debug("Issuing initial WWW-Authenticate challenge on FD ";.utl.zw[])
    ]
  ;txt:("HTTP/1.1 401 Unauthorized"
       ;"WWW-Authenticate: Negotiate",$[count B;" ",B;""]
       ;"Content-Type: text/html"
       ;"Content-Length: 0"
       ;"Connection: ",.h.ka 601000i
-      //;"Set-Cookie: ",cuk
       ;"Date: ",.web.fmtHttpDate[]
       ;"Server: ",first system"hostname"
       ;"";"")
  ;"\r\n"sv txt
  }
 
+// Given Client, target Service, TTL and any cookie value submitted by the client, return
+// (1;C) -- or some derivation of C, e.g. after removing the Krb5 Realm. Were you to set a
+// new cookie in .web.genKrb5Challenge, it would be present here, and you would be able to
+// identify future connections by the client from the cookie and not need to issue the 
+// SPNEGO challenge. I did play with this until I got the websocket working! However, the
+// problem there was the websocket was opening ws://localhost instead of ws://hostname, and
+// the 401 Not Authorised response was terminal. Since making that change the SPNEGO 
+// (pre-upgrade) challenge worked as expected and the upgrade successful (i.e. no cookie
+// needed).
 // K: cookie 10h; C: client 10h; S: service 10h; T: seconds TTL -6h
 .web.blessConn:{[K;C;S;T]
-//   .log.debug("blessConn: ";T;" ";$[50<count K;50#K;K])
-//  ;if[K like .web.keksNom,"*"
-//     ;`.web.cookies upsert (C;.utl.zP[] + 18h$T;K)
-//     ]
- ;.web.userOk C
+  .web.userOk C
  }
 
-// .web.cookieAuthOk:{[K]
-//   $[count tbl:select user from .web.cookies where data~\:K
-//    ;[.log.debug("Have valid cookie-auth for user ";first tbl`user;" with cookie ";50#K)
-//     ;(1b;first tbl`user)
-//     ]
-//    ;0b
-//    ]
-//  }
 // T is a two-element tuple, of request text and headers; the latter is a dict. The
 // function must return a two-element list, whose first element is in the set {0, 1, 2, 4}.
 // 0j generates a 401 not-authorized response.
@@ -246,21 +232,54 @@
 //
 // C.f. https://code.kx.com/q/ref/dotz/#zac-http-auth
 //
-// RFC 4559 s.5, https://www.rfc-editor.org/rfc/rfc4559.html:
-// If the context is not complete, the server will respond with a 401 status code with
-// a WWW-Authenticate header containing the gssapi-data.
-//   S: HTTP/1.1 401 Unauthorized
-//   S: WWW-Authenticate: Negotiate 749efa7b23409c20b92356
-// The context will need to be preserved between client messages.
+// Perhaps after we have validated the SPNEGO token, extracted and approved the client, we
+// return (1;"user"). kdb will then call .z.ph to return the resource. Prior to .h.ka in kdb
+// 4.1 (despite setting `Connection: keep-alive` in the headers) kdb closes the connection
+// after each request/response pair. This is evident from the RST packets seen in
+// Wireshark.
+//
+// However, this doesn't upset the SPNEGO sequence, which then runs as follows:
+//   GET /something
+//   401 Not authd, WWW-Authenticate: Negotiate
+//   [close]
+//   GET /something, Authorization: Negotiate YII..
+//   200 OK
+//   [close]
+// 
+// This may look different if we're using .h.ka, as kdb will not immediately close the
+// connection.
+// 
+// However ... in RFC 4559 (https://www.rfc-editor.org/rfc/rfc4559.html), re the SPNEGO
+// auth flow, s.5 provides: 
+// "If the context is not complete, the server will respond with a 401 status code with
+// a WWW-Authenticate header containing the gssapi-data."
+// The _next_ 401 Not Authd WWW-Authenticate response then becomes `Negotiate 749efa7b..`. 
+//
+// The intractable problem is then connection tracking, since we need to associate the
+// current GSSAPI `gss_ctx_id_t` context-handle with _this_ message sequence. HTTP is meant
+// to be a stateless protocol. Even with .h.ka, we can't lean on the file-descriptor, since
+// the browser might close the connection and there is no HTTP close-handler like .z.pc we
+// can use.
+//
+// Perhaps we could set a cookie to encode a lookup key for a context-handle we can stash
+// somewhere? I'm only half joking. This might work some of the time, but it's not
+// trustworthy as a browser can use mutiple concurrent connections and "the other one" could
+// return the cookie out-of-band and corrupt our data flow.
+//
+// Thus, _mutual_ Krb5 authentication seems to be off the cards (not that I know how to
+// get the browser to ask for this).
+//
+// To be fair, I haven't seen the GSSAPI ask to send data back to the browser.
 .web.zac:{[T]
   .log.debug("HTTP auth required for FD ";.utl.zw[])
  ;txt:T 0
  ;hdr:T 1
  ;.web.reqs,:enlist T
- //;tup:$[1b~first tag:.web.cookieAuthOk hdr`Cookie
- //      ;.web.userOk tag 1
+ // Were you to use a cookie to identify clients that had authenticated, you would
+ // probably want to add a (new) .web.chkCookieAuth[hdr`Cookie] here as the first
+ // test-branch.
  ;tup:$[""~tkn:hdr`Authorization
-       ;.web.customRps .web.genKrb5Challenge[hdr;""]
+       ;.web.customRep .web.genKrb5Challenge[hdr;""]
        ;not tkn like "Negotiate YII*"
        ;.web.http401
        ;0b~res:.krb.doKrb5Auth (count "Negotiate ")_ tkn
@@ -268,13 +287,12 @@
        ;1b~res 0
        ;.web.blessConn . @[res;0;:;hdr`Cookie]
        ;0b~res 0
-       ;.web.customRps .web.genKrb5Challenge[hdr;res 1]
+       ;.web.customRep .web.genKrb5Challenge[hdr;res 1]
        ;.web.http401
        ]
  ;.log.debug(".z.ac result is (";tup 0;";";$[2=tup 0;first"\r\n"vs tup 1;tup 1];")")
  ;tup
  }
-//.web.zac:{[F;T] .Q.trp[F;T;{.log.error(x;":\n";.Q.sbt y)}]}.web.zac
 
 .web.zwo:{[H]
   .log.debug("Have websocket-open on FD ";H)
