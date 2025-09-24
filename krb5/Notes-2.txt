@@ -1805,6 +1805,7 @@ in Wireshark.
 https://www.rfc-editor.org/rfc/rfc7235#section-5.1.2
 Via https://stackoverflow.com/a/25235099
 
+------------------------------------------8<----8<------------------------------------------------
 Reading from /dev/urandom
 -------------------------
 https://serverfault.com/a/481171
@@ -1813,3 +1814,209 @@ head -c 500 /dev/urandom | tr -dc 'a-zA-Z0-9~!@#$%^&*_-' | fold -w 3
 Sibling comment
 od -vAn -N4 -tu4 < /dev/urandom
 txt:(raze system"od -vAn -N32 -tu8 < /dev/urandom") except " "
+
+------------------------------------------8<----8<------------------------------------------------
+Chromium-Browser Does Accept Negotiate TOKEN Reply
+--------------------------------------------------
+Added a file `auth_server_whitelist.json` to `/etc/chromium/policies/managed/` with content
+```
+{ "AuthServerAllowlist": "fedora" }
+```
+C.f. https://superuser.com/a/1761821
+
+Re-ran the GET on Chromium and got the response required. The pages load; interestingly, it replies
+with an empty 'Authorization: Negotiate ' header, which Wireshark said was a corrupted header.
+
+GET /index.html HTTP/1.1
+Host: fedora:30097
+Connection: keep-alive
+Cache-Control: max-age=0
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Accept-Encoding: gzip, deflate
+Accept-Language: en-GB,en-US;q=0.9,en;q=0.8
+
+
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Negotiate
+Content-Type: text/html
+Content-Length: 0
+Set-Cookie: client_id=WtY3VEhYsUEh9frDxOlo/Q==
+Set-Cookie: context=
+Connection: keep-alive
+Date: Wed, 24 Sep 2025 20:36:49 GMT
+Server: fedora
+
+
+GET /index.html HTTP/1.1
+Host: fedora:30097
+Connection: keep-alive
+Cache-Control: max-age=0
+Authorization: Negotiate YIIDmAYGKwYBBQUCoIIDjDCCA4igDTALBgkqhkiG9xIBAgKiggN1BIIDcWCCA20GCSqGSIb3EgECAgEAboIDXDCCA1igAwIBBaEDAgEOogcDBQAAAAAAo4ICX2GCAlswggJXoAMCAQWhDxsNTUlOREZSVUlULktSQqIZMBegAwIBAaEQMA4bBEhUVFAbBmZlZG9yYaOCAiIwggIeoAMCARShAwIBAaKCAhAEggIMbvJ6RrCb1uscunrUKuN7QOVXx00pDANRozDak9uuPSuIFR2VPOiMwraz9qOMNL6tTb5AZkkEkV3jE0faXMnzPE/htRoPK7QIV0gAxbp5rpc5Pb1gZnU8FP1HnyJQV3wQZtfCoNe+G/sSX1E507cPj5zFETIrr4W2AVffPafjqHbsxYUIdMcgQN10qU1aT3UFnh8LLcpu1e2beWlojryHweJ/9TN2irHbqUuZShU608XzSqo6/tJHA8W4HwlqpcWJEcS+9V0uWYsV68kkEb3QmD1Jv+K2WCOY699gbJgOeh0Ul7LbmVh78tbfYk/wGGAnw5MCa0MxOcFv8UEbK0tq8IR3Y3ufs54hXmlt/9q47sepGlu7XoUnbbqlfVnjP6UnU8hV3gsOX4e2PJXt5Et34K+BnoKBsnGufo/TQE9x6pCkfrQMUmBWQcsrp3OmK8Xg5DBxaqRJIqu65ndX4ddPxSY7US6Fym9C9RCIKKLZCcJVmckSyAcV+vearQ0/5QvMWDg5CIuu1IINOjZ75AZaiVEYYP5f8hmiFTHMjZq5HWVkNs5tg3MTYh/qtmcl4nM7AQMNw/Bur1fCp7i7c6bD1BcvjQ6OIJe6MVvHjKv9tytARJ5xSoclylaLS+5qvfmHon0lhuZ2TxZ2rP2Zo+SiQq02Ywy0/aAVU1x0Oz4FPqex5JzzVRru0MZHVwukgd8wgdygAwIBFKKB1ASB0UUmrcBGua9dHTV/Uaz77IUCyk+hJDJCBmxSIX1diSguWxnNzjrORwPrH+8Up47XjHE7WScett3q8e+ZJN576og9IfFcxCRZ8j1xr/275TR81UHCj/TAchOgJL2WJft4wDNHPx40niHo0KjYWXPucDa4ZzrDiwYKNNHQUowzfb+KQvcEQbftex4VY2WWySkqC0koFPjKra/PK1Y/sxXZkbTMB1t7ESzOaIqkEdy8eQTnraY5MmNOW2gUCiRRJrKE24O9prMex6hUjUSTWX1j7SPE
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Accept-Encoding: gzip, deflate
+Accept-Language: en-GB,en-US;q=0.9,en;q=0.8
+Cookie: client_id=WtY3VEhYsUEh9frDxOlo/Q==; context=
+
+
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Negotiate oRQwEqADCgEAoQsGCSqGSIb3EgECAg==
+Content-Type: text/html
+Content-Length: 0
+Set-Cookie: client_id=WtY3VEhYsUEh9frDxOlo/Q
+Set-Cookie: context=uUrTJqL0BzIq0DpOAAQ1eA==
+Connection: keep-alive
+Date: Wed, 24 Sep 2025 20:36:49 GMT
+Server: fedora
+
+
+GET /index.html HTTP/1.1
+Host: fedora:30097
+Connection: keep-alive
+Cache-Control: max-age=0
+Authorization: Negotiate 
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Accept-Encoding: gzip, deflate
+Accept-Language: en-GB,en-US;q=0.9,en;q=0.8
+Cookie: client_id=WtY3VEhYsUEh9frDxOlo/Q; context=uUrTJqL0BzIq0DpOAAQ1eA==
+
+
+HTTP/1.1 200 OK
+Content-Type: text/html
+Connection: keep-alive
+Connection-Length: 711
+Date: Wed, 24 Sep 2025 20:36:49 GMT
+Server: fedora
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Kerberos test</title>
+    <meta charset="utf-8" />
+    <script type="module">
+
+import { MgKdb } from '/ipc.js'
+
+window.MgKrb5 = {}
+
+class Receiver {
+
+  kdbConnected = conn => {
+    console.log("Connected")
+  }
+
+  kdbDisconnected = conn => {
+    console.log("Disconnected")
+  }
+}
+
+MgKrb5.receiver = new Receiver()
+
+window.mg_init = function() {
+  const listener = {
+    onConnected: MgKrb5.receiver.kdbConnected,
+    onDisconnected: MgKrb5.receiver.kdbDisconnected,
+  }
+  MgKrb5.conn = new MgKdb.Endpoint(`ws://${window.location.hostname}:30097`, listener)
+}
+
+    </script>
+  </head>
+  <body onload="mg_init()">
+    <div id="mg_root"></div>
+  </body>
+</html>
+
+------------------------------------------8<----8<------------------------------------------------
+The GSS SNPEGO Header Decoded:
+------------------------------
+
+Frame 24: 1844 bytes on wire (14752 bits), 1844 bytes captured (14752 bits) on interface lo, id 0
+Ethernet II, Src: 00:00:00_00:00:00 (00:00:00:00:00:00), Dst: 00:00:00_00:00:00 (00:00:00:00:00:00)
+Internet Protocol Version 4, Src: 192.168.178.120, Dst: 192.168.178.120
+Transmission Control Protocol, Src Port: 38634, Dst Port: 30097, Seq: 466, Ack: 250, Len: 1778
+Hypertext Transfer Protocol
+    GET /index.html HTTP/1.1\r\n
+    Host: fedora:30097\r\n
+    Connection: keep-alive\r\n
+    Cache-Control: max-age=0\r\n
+    […] Authorization: Negotiate YIIDmAYGKwYBBQUCoIIDjDCCA4igDTALBgkqhkiG9xIBAgKiggN1BIIDcWCCA20GCSqGSIb3EgECAgEAboIDXDCCA1igAwIBBaEDAgEOogcDBQAAAAAAo4ICX2GCAlswggJXoAMCAQWhDxsNTUlOREZSVUlULktSQqIZMBegAwIBAaEQMA4bBEhUVFAbBmZlZG9yYaOCAiIwggIe
+        GSS-API Generic Security Service Application Program Interface
+            OID: 1.3.6.1.5.5.2 (SPNEGO - Simple Protected Negotiation)
+            Simple Protected Negotiation
+                negTokenInit
+                    mechTypes: 1 item
+                        MechType: 1.2.840.113554.1.2.2 (KRB5 - Kerberos 5)
+                    mechToken […]: 6082036d06092a864886f71201020201006e82035c30820358a003020105a10302010ea20703050000000000a382025f6182025b30820257a003020105a10f1b0d4d494e4446525549542e4b5242a2193017a003020101a110300e1b04485454501b066665646f7261a38202223082
+                    krb5_blob […]: 6082036d06092a864886f71201020201006e82035c30820358a003020105a10302010ea20703050000000000a382025f6182025b30820257a003020105a10f1b0d4d494e4446525549542e4b5242a2193017a003020101a110300e1b04485454501b066665646f7261a38202223082
+                        KRB5 OID: 1.2.840.113554.1.2.2 (KRB5 - Kerberos 5)
+                        krb5_tok_id: KRB5_AP_REQ (0x0001)
+                        Kerberos
+                            ap-req
+                            Provides learnt encTicketPart_key in frame 24 keytype 20 (id=24.1 same=0) (3612e4c3...)
+                                [Expert Info (Chat/Security): Provides learnt encTicketPart_key in frame 24 keytype 20 (id=24.1 same=0) (3612e4c3...)]
+                                    [Provides learnt encTicketPart_key in frame 24 keytype 20 (id=24.1 same=0) (3612e4c3...)]
+                                    [Severity level: Chat]
+                                    [Group: Security]
+                            Provides learnt authenticator_subkey in frame 24 keytype 20 (id=24.2 same=0) (802ebd6e...)
+                                [Expert Info (Chat/Security): Provides learnt authenticator_subkey in frame 24 keytype 20 (id=24.2 same=0) (802ebd6e...)]
+                                    [Provides learnt authenticator_subkey in frame 24 keytype 20 (id=24.2 same=0) (802ebd6e...)]
+                                    [Severity level: Chat]
+                                    [Group: Security]
+                            Used keytab principal HTTP/fedora@MINDFRUIT.KRB keytype 20 (id=keytab.1 same=0) (6e9da1ef...)
+                                [Expert Info (Chat/Security): Used keytab principal HTTP/fedora@MINDFRUIT.KRB keytype 20 (id=keytab.1 same=0) (6e9da1ef...)]
+                                    [Used keytab principal HTTP/fedora@MINDFRUIT.KRB keytype 20 (id=keytab.1 same=0) (6e9da1ef...)]
+                                    [Severity level: Chat]
+                                    [Group: Security]
+                            Used keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB keytype 20 (id=keytab.30 same=0) (b2446b78...)
+                                [Expert Info (Chat/Security): Used keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB keytype 20 (id=keytab.30 same=0) (b2446b78...)]
+                                    [Used keytab principal krbtgt/MINDFRUIT.KRB@MINDFRUIT.KRB keytype 20 (id=keytab.30 same=0) (b2446b78...)]
+                                    [Severity level: Chat]
+                                    [Group: Security]
+                            Used learnt encTicketPart_key in frame 24 keytype 20 (id=24.1 same=0) (3612e4c3...)
+                                [Expert Info (Chat/Security): Used learnt encTicketPart_key in frame 24 keytype 20 (id=24.1 same=0) (3612e4c3...)]
+                                    [Used learnt encTicketPart_key in frame 24 keytype 20 (id=24.1 same=0) (3612e4c3...)]
+                                    [Severity level: Chat]
+                                    [Group: Security]
+    Upgrade-Insecure-Requests: 1\r\n
+    User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36\r\n
+    Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7\r\n
+    Accept-Encoding: gzip, deflate\r\n
+    Accept-Language: en-GB,en-US;q=0.9,en;q=0.8\r\n
+    Cookie: client_id=RyEZat9tZUKsyMd2Z2gfeg==; context=\r\n
+    \r\n
+    [Response in frame: 25]
+    [Full request URI: http://fedora:30097/index.html]
+
+The reply is interesting, since it seems to encode "OK mate!", and is already SPNEGO-encoded:
+
+Frame 25: 370 bytes on wire (2960 bits), 370 bytes captured (2960 bits) on interface lo, id 0
+Ethernet II, Src: 00:00:00_00:00:00 (00:00:00:00:00:00), Dst: 00:00:00_00:00:00 (00:00:00:00:00:00)
+Internet Protocol Version 4, Src: 192.168.178.120, Dst: 192.168.178.120
+Transmission Control Protocol, Src Port: 30097, Dst Port: 38634, Seq: 250, Ack: 2244, Len: 304
+Hypertext Transfer Protocol
+    HTTP/1.1 401 Unauthorized\r\n
+    WWW-Authenticate: Negotiate oRQwEqADCgEAoQsGCSqGSIb3EgECAg==\r\n
+        GSS-API Generic Security Service Application Program Interface
+            Simple Protected Negotiation
+                negTokenTarg
+                    negResult: accept-completed (0)
+                    supportedMech: 1.2.840.113554.1.2.2 (KRB5 - Kerberos 5)
+    Content-Type: text/html\r\n
+    Content-Length: 0\r\n
+    Set-Cookie: client_id=RyEZat9tZUKsyMd2Z2gfeg\r\n
+    Set-Cookie: context=bLdpMH2L0rJiefJMcpgwoQ==\r\n
+    Connection: keep-alive\r\n
+    Date: Wed, 24 Sep 2025 20:51:43 GMT\r\n
+    Server: fedora\r\n
+    \r\n
+    [Request in frame: 24]
+    [Time since request: 0.007812926 seconds]
+    [Request URI: /index.html]
+    [Full request URI: http://fedora:30097/index.html]
+
