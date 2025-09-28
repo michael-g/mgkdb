@@ -82,10 +82,7 @@ Running transaction
 Complete!
 ```
 
-
-
 CREATING A NEW SERVER
 =====================
 [Kerberos](https://fedoraproject.org/wiki/Infrastructure/Kerberos) docs for Fedora.
 Check `/etc/krb5.conf`
-
