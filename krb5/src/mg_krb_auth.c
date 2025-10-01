@@ -12,17 +12,7 @@
 
 #define KUNARY 0x65
 
-//#include <sys/types.h>
-//#include <ctype.h>
-//#include <unistd.h>
 
-//#include <sys/socket.h>
-//#include <netinet/in.h>
-//#include <arpa/inet.h>
-//#include <sys/uio.h>
-//#include <sys/time.h>
-
-// From https://web.mit.edu/freebsd/head/contrib/wpa/src/utils/base64.c
 /*
  * Base64 encoding/decoding (RFC1341)
  * Copyright (c) 2005-2011, Jouni Malinen <j@w1.fi>
@@ -30,7 +20,7 @@
  * This software may be distributed under the terms of the BSD license.
  * See README for more details.
  */
-
+// From https://web.mit.edu/freebsd/head/contrib/wpa/src/utils/base64.c
 unsigned char * base64_encode(const unsigned char *src, size_t len, size_t *out_len);
 unsigned char * base64_decode(const unsigned char *src, size_t len, size_t *out_len);
 
@@ -104,7 +94,6 @@ unsigned char * base64_encode(const unsigned char *src, size_t len, size_t *out_
 	return out;
 }
 
-
 /**
  * base64_decode - Base64 decode
  * @src: Data to be decoded
@@ -172,33 +161,6 @@ unsigned char* base64_decode(const unsigned char *src, size_t len, size_t *out_l
 
 	*out_len = pos - out;
 	return out;
-}
-
-__attribute__((unused))
-static
-K mg_void_ptr_to_byte_vec(void *ptr)
-{
-	union {
-		void *pointer;
-		int8_t ary[sizeof(void*)];
-	} convert;
-
-	convert.pointer = ptr;
-	K vec = ktn(KG, 8);
-	memcpy(vec->G0, convert.ary, sizeof(void*));
-	return vec;
-}
-
-__attribute__((unused))
-static
-void* mg_byte_vec_to_void_ptr(K vec)
-{
-	union {
-		void *pointer;
-		int8_t ary[sizeof(void*)];
-	} convert;
-	memcpy(convert.ary, vec->G0, sizeof(void*));
-	return convert.pointer;
 }
 
 // See https://docs.oracle.com/cd/E19455-01/806-3814/806-3814.pdf, although 2000 they're better than most
@@ -311,6 +273,7 @@ void mg_print_context_flags(int flags)
 }
 #undef CHK_RET_FLAGS
 
+static
 void mg_release_buffer(gss_buffer_t buffer)
 {
 	if (NULL != buffer->value) {
@@ -357,15 +320,10 @@ void mg_print_gss_mechs(void)
 	if (GSS_S_COMPLETE != res) {
 		fprintf(stderr, "ERROR: failed in gss_release_oid_set\n");
 	}
-
 }
 
-K mg_print_mechs(K dummy)
-{
-	mg_print_gss_mechs();
-	return kb(1);
-}
-
+__attribute__((unused))
+static
 void mg_print_mech(gss_OID mech_typ)
 {
 	OM_uint32 minor_status, err;
@@ -381,6 +339,7 @@ void mg_print_mech(gss_OID mech_typ)
 	}
 }
 
+static
 void mg_release_name(gss_name_t *name)
 {
 	OM_uint32 minor_status, err;
@@ -390,6 +349,7 @@ void mg_release_name(gss_name_t *name)
 	}
 }
 
+static
 K mg_get_display_name(gss_name_t name)
 {
 	K k_name = (K)NULL;
@@ -411,11 +371,30 @@ K mg_get_display_name(gss_name_t name)
 	return k_name;
 }
 
+static
 K mg_inquire_service_target(gss_ctx_id_t context_handle)
 {
+	if (GSS_C_NO_CONTEXT == context_handle) {
+		return kpn("", 0);
+	}
 	OM_uint32 minor_status, res;
 	gss_name_t tgt_name;
+	// gss_name_t src_name, tgt_name;
+	// OM_uint32 ttl, flags;
+	// gss_OID mech;
+	// int local, open;
 
+	fprintf(stdout, "TEST: 1\n");
+	// res = gss_inquire_context(
+	// 						&minor_status
+	// 					, context_handle
+	// 					, &src_name       // source_name
+	// 					, &tgt_name       // target_name
+	// 					, &ttl            // lifetime_rec
+	// 					, &mech           // mech_type
+	// 					, &flags          // ctx_flags
+	// 					, &local          // locally_initiated
+	// 					, &open);         // open
 	res = gss_inquire_context(
 							&minor_status
 						, context_handle
@@ -427,6 +406,7 @@ K mg_inquire_service_target(gss_ctx_id_t context_handle)
 						, NULL            // locally_initiated
 						, NULL);          // open
 
+	fprintf(stdout, "TEST: 2\n");
 	K k_tgt_name = (K)0;
 
 	if (GSS_ERROR(res)) {
@@ -450,66 +430,87 @@ void mg_delete_sec_context(gss_ctx_id_t *context_handle)
 		}
 	}
 }
-K mg_export_sec_context(gss_ctx_id_t *context_handle)
+
+__attribute__((unused))
+static
+void mg_print_buffer_data_hex(const char *lede, gss_buffer_t buf)
 {
+	fprintf(stdout, "DEBUG: %s; bytes are:\n", lede);
+	unsigned char *bin = buf->value;
+
+	for (size_t i = 0 ; i < buf->length ; i++) {
+	 	fprintf(stdout, "%02hhx", bin[i]);
+	}
+	fprintf(stdout, "\n");
+}
+
+static
+int mg_export_sec_context(gss_ctx_id_t *context_handle, K *result)
+{
+	if (GSS_C_NO_CONTEXT == *context_handle) {
+		*result = kpn("", 0);
+		return 1;
+	}
+
 	OM_uint32 err, minor_status = 0;
 	gss_buffer_desc buf = {0};
 	err = gss_export_sec_context(&minor_status, context_handle, &buf);
 	if (GSS_ERROR(err)) {
 		mg_print_gss_error(err, minor_status, GSS_C_NULL_OID);
 		mg_delete_sec_context(context_handle);
-		return knk(2, kb(0), krr("context export"));
+		*result = krr("context export");
+		return 0;
 	}
-	//------------------------------------------------------------------------------------------
-	// fprintf(stdout, "DEBUG: exported context bytes are:\n");
-	// for (size_t i = 0 ; i < buf.length ; i++) {
-	// 	fprintf(stdout, "%02x", 0xFF & ((unsigned char*)(buf.value))[i]);
-	// }
-	// fprintf(stdout, "\n");
 
-	// fprintf(stdout, "DEBUG: exported context chars are:\n");
-	// for (size_t i = 0 ; i < buf.length ; i++) {
-	// 	fprintf(stdout, "%c", ((unsigned char*)(buf.value))[i]);
-	// }
-	// fprintf(stdout, "\n");
-	//------------------------------------------------------------------------------------------
 	size_t b64_len = 0;
+
 	unsigned char *b64 = base64_encode((unsigned char*)buf.value, buf.length, &b64_len);
+
 	if (NULL == b64) {
 		// context has been disassociated and closed already, no need to/can't delete again
-		return knk(2, kb(0), krr("b64.encode failed, export failed"));
+		*result = krr("b64.encode failed, export failed");
+		return 0;
 	}
-	return knk(2, kb(1), kpn((S)b64, (J)b64_len));
+
+	*result = kpn((S)b64, (J)b64_len);
+
+	free(b64);
+	return 1;
 }
 
+static
 gss_ctx_id_t mg_import_sec_context(K k_ctx)
 {
 	OM_uint32 err, minor_status = 0;
 	gss_ctx_id_t context_handle = GSS_C_NO_CONTEXT;
 	size_t vec_len = 0;
-	fprintf(stdout, "DEBUG: decoding context-handle %.*s\n", (int)k_ctx->n, (S)k_ctx->G0);
 	unsigned char *vec = base64_decode((unsigned char*)k_ctx->G0, (size_t)k_ctx->n, &vec_len);
 	if (NULL == vec) {
-		fprintf(stderr, "ERROR: failed in b64-decode of sec-context (%i)\n", __LINE__);
-		return context_handle;
+		fprintf(stderr, "ERROR: failed in b64-decode of import-sec-context\n");
+		return GSS_C_NO_CONTEXT;
 	}
 	gss_buffer_desc buf = { .length = vec_len, .value = vec };
+
 	err = gss_import_sec_context(&minor_status, &buf, &context_handle);
-	mg_release_buffer(&buf);
+
+	free(vec);
+
 	if (GSS_ERROR(err)) {
 		mg_print_gss_error(err, minor_status, GSS_C_NULL_OID);
-		return NULL;
+		return GSS_C_NO_CONTEXT;
 	}
+	fprintf(stdout, "DEBUG: imported sec-context\n");
 	return context_handle;
 }
 
-
+static
 K mg_delete_ctx_return_err_xk(gss_ctx_id_t *context_handle, K err)
 {
 	mg_delete_sec_context(context_handle);
 	return err;
 }
 
+static
 K mg_delete_ctx_return_err_xs(gss_ctx_id_t *context_handle, char *msg)
 {
 	return mg_delete_ctx_return_err_xk(context_handle, krr(msg));
@@ -535,7 +536,9 @@ K mg_accept_sec_context(K k_b64_tkn, K k_ctx)
 
 	if (KC == k_ctx->t && 0 < k_ctx->n) {
 		context_handle = mg_import_sec_context(k_ctx);
-		fprintf(stdout, "DEBUG: Using continuation context_handle");
+		if (GSS_C_NO_CONTEXT == context_handle) {
+			return krr("failed to import context");
+		}
 	}
 
 	OM_uint32       ret_flags      = 0;
@@ -562,6 +565,8 @@ K mg_accept_sec_context(K k_b64_tkn, K k_ctx)
 	       , NULL                      // gss_cred_id_t delegated credentials handle
 	       );
 
+	free(b64);
+
 	if (GSS_SUPPLEMENTARY_INFO(res)) {
 		fprintf(stdout, "DEBUG: GSS_SUPPLEMENTARY_INFO requested\n");
 		mg_print_gss_error(res, minor_status, GSS_C_NULL_OID);
@@ -578,23 +583,20 @@ K mg_accept_sec_context(K k_b64_tkn, K k_ctx)
 				return krr("GSSAPI signals CONTINUE_NEEDED but base64_encode failed");
 			}
 			K k_out_tkn = kpn((S)b64, b64_len);
+			free(b64);
 
 			mg_release_buffer(&output_token);
 
-			K k_ctx_lst = mg_export_sec_context(&context_handle);
-
-			char err = kK(k_ctx_lst)[0]->g;
-			K res = r1(kK(k_ctx_lst)[1]);
-			r0(k_ctx_lst);
-
+			K k_ctx = NULL;
+			int err = mg_export_sec_context(&context_handle, &k_ctx);
 			if (0 == err) {
 				mg_delete_sec_context(&context_handle);
-				return res;
+				return k_ctx;
 			}
 
 			fprintf(stdout, "DEBUG: gss_accept_sec_context requested CONTINUE_NEEDED\n");
 
-			return knk(3, ki(2), res, k_out_tkn);
+			return knk(3, ki(2), k_ctx, k_out_tkn);
 		}
 	}
 
@@ -662,6 +664,7 @@ K mg_accept_sec_context(K k_b64_tkn, K k_ctx)
 			return mg_delete_ctx_return_err_xs(&context_handle,"GSSAPI provided additional data for the Client but base-64 encoding failed");
 		}
 		k_out_tkn = kpn((S)b64, (J)b64_len);
+		free(b64);
 	}
 
 	// Retrieve the Target name using gss_inquire_context
@@ -669,20 +672,19 @@ K mg_accept_sec_context(K k_b64_tkn, K k_ctx)
 
 	fprintf(stdout, "DEBUG: Service target is %.*s\n", (int)k_tgt_name->n, (char*)k_tgt_name->G0);
 
-	// returns (1b;"cafebabe...b64==") on success, (0b;'"signal") on error
-	K k_ctx_lst = mg_export_sec_context(&context_handle);
-	// retrieve a handle to the b64-encoded context, and "r1 it", so we can r0 the
-	// enclosing list, which should dispose of both it and the leading bool object
-	res = (int)(kK(k_ctx_lst)[0]->g);
-	K k_ctx_or_err = r1(kK(k_ctx_lst)[1]);
-	r0(k_ctx_lst);
-
-	if (0 == res) {
-		// context was disposed by mg_export_sec_context
-		return k_ctx_or_err;
+	if (0 == (ret_flags & GSS_C_TRANS_FLAG)) {
+		return krr("context-export prohibited");
 	}
 
-	return knk(6, ki(1), k_src_name, k_tgt_name, ki((I)time_rec), k_ctx_or_err, k_out_tkn);
+	k_ctx = NULL;
+	int err = mg_export_sec_context(&context_handle, &k_ctx);
+
+	if (0 == err) {
+		// context was disposed by mg_export_sec_context
+		return k_ctx;
+	}
+
+	return knk(6, ki(1), k_src_name, k_tgt_name, ki((I)time_rec), k_ctx, k_out_tkn);
 }
 // end mg_accept_sec_context
 
@@ -814,9 +816,11 @@ K mg_cont_sec_context(K k_src_name, K k_tgt_name, K k_ctx, K k_token)
 
 	gss_buffer_t input_token = GSS_C_NO_BUFFER;
 	gss_buffer_desc token_data = {0};
-	if (KC == k_token->t) {
+	unsigned char *b64 = NULL;
+
+	if (KC == k_token->t && k_token->n > 0) {
 		size_t b64_len = 0;
-		unsigned char* b64 = base64_decode((unsigned char*)k_token->G0, k_token->n, &b64_len);
+		b64 = base64_decode((unsigned char*)k_token->G0, k_token->n, &b64_len);
 		if (NULL == b64) {
 			return krr("failed to decode continuation input-token");
 		}
@@ -825,12 +829,13 @@ K mg_cont_sec_context(K k_src_name, K k_tgt_name, K k_ctx, K k_token)
 		input_token = &token_data;
 	}
 
-	OM_uint32       req_flags = GSS_C_CONF_FLAG | GSS_C_INTEG_FLAG | GSS_C_REPLAY_FLAG | GSS_C_SEQUENCE_FLAG | GSS_C_MUTUAL_FLAG;
+	OM_uint32       req_flags = GSS_C_CONF_FLAG | GSS_C_INTEG_FLAG | GSS_C_REPLAY_FLAG | GSS_C_SEQUENCE_FLAG | GSS_C_MUTUAL_FLAG | GSS_C_TRANS_FLAG;
 	gss_buffer_desc output_token = {0};
 	OM_uint32       ret_flags;
 	OM_uint32       time_rec;
 
 	fprintf(stdout, "DEBUG: beginning init_sec_context\n");
+
 	res = gss_init_sec_context(
 	            &minor_status
 	          , cred_handle                         // use the entirety of the keytab with GSS_C_NO_CREDENTIAL
@@ -846,6 +851,8 @@ K mg_cont_sec_context(K k_src_name, K k_tgt_name, K k_ctx, K k_token)
 	          , &ret_flags                          // flags applied
 	          , &time_rec                           // validity time
 	          );
+
+	free(b64);
 
 	if (KC == k_token->t) {
 		mg_release_buffer(&token_data);
@@ -868,6 +875,7 @@ K mg_cont_sec_context(K k_src_name, K k_tgt_name, K k_ctx, K k_token)
 			return krr("failed in base64_encode");
 		}
 		k_token = kpn((S)b64, b64_len);
+
 		free(b64);
 	}
 	else {
@@ -881,25 +889,24 @@ K mg_cont_sec_context(K k_src_name, K k_tgt_name, K k_ctx, K k_token)
 		return krr("logic error: should be workflow 2");
 	}
 	else {
+		fprintf(stdout, " TEST: about to inquire-service-target\n");
 		k_tgt_name = mg_inquire_service_target(context_handle);
+		fprintf(stdout, " TEST: service-target-inquiry complete\n");
 		if ((K)0 == k_tgt_name) {
 			return krr("failed to resolve a service name");
 		}
 	}
-	K k_ctx_lst = mg_export_sec_context(&context_handle);
-	if (0 == kK(k_ctx_lst)[1]->g) {
-		// TODO check whether we need to delete context
-		K err = r1(kK(k_ctx_lst)[1]);
-		r0(k_ctx_lst);
-		return err;
+
+	if (0 == (ret_flags & GSS_C_TRANS_FLAG)) {
+		return krr("context-export prohibited");
 	}
-	// keep b64-encoded context data while releasing the true/false wrapper
-	k_ctx = r1(kK(k_ctx_lst)[1]);
-	r0(k_ctx_lst);
 
-	K vals = knk(4, ki(workflow), k_tgt_name, k_ctx, k_token);
-
-	return vals;
+	k_ctx = NULL;
+	int err = mg_export_sec_context(&context_handle, &k_ctx);
+	if (0 == err) {
+		return k_ctx;
+	}
+	return knk(4, ki(workflow), k_tgt_name, k_ctx, k_token);
 }
 // end mg_cont_sec_context
 
