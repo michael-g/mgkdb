@@ -1,7 +1,0 @@
-.cache/
-.vscode/
-bin/
-build/
-logs/
-doco
-**/.syntastic_cpp_config
