@@ -18,8 +18,8 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 #include <stdint.h> // uint16_t
 
 #include "KdbType.h"
-#include "KdbIoDefs.h"
-#include "CircularBuffer.h"
+#include "MgIoDefs.h"
+#include "MgCircularBuffer.h"
 
 #include <algorithm> // std::copy
 #include <tuple> // std::ignore

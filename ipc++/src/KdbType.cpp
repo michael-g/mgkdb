@@ -15,7 +15,7 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 */
 
 #include "KdbType.h"
-#include "KdbIoDefs.h"
+#include "MgIoDefs.h"
 
 #ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200809L // strnlen
@@ -568,7 +568,7 @@ requires(T typ)
 };
 
 template <typename T>
-	concept KdbReadableAtom = requires(T typ, ReadBuf & buf)
+	concept KdbReadableIntegralAtom = requires(T typ, ReadBuf & buf)
 {
 	requires std::same_as<decltype(typ.m_typ), const KdbType>; // from C++20: {auto(typ.m_typ)}->std::same_as<const KdbType>;
 	std::is_integral<decltype(typ.m_val)>::value;
@@ -576,7 +576,7 @@ template <typename T>
 };
 
 template <typename T>
-	concept KdbWritableAtom = requires(const T typ, WriteBuf & buf)
+	concept KdbWritableIntegralAtom = requires(const T typ, WriteBuf & buf)
 {
 	requires std::same_as<decltype(typ.m_typ), const KdbType>;
 	{ typ.write(buf) } -> std::same_as<WriteResult>;
@@ -584,7 +584,7 @@ template <typename T>
 };
 
 template <typename T>
-	concept KdbVectorReader = requires(T typ, ReadBuf & buf)
+	concept KdbIntegralVectorReader = requires(T typ, ReadBuf & buf)
 {
 	// requires std::is_base_of<KdbBase, T>::value;
 	requires std::same_as<decltype(typ.m_typ), const KdbType>;
@@ -594,7 +594,7 @@ template <typename T>
 };
 
 template <typename T>
-	concept KdbVectorWriter = requires(const T typ, WriteBuf & buf)
+	concept KdbIntegralVectorWriter = requires(const T typ, WriteBuf & buf)
 {
 	requires std::same_as<decltype(typ.m_typ), const KdbType>;
 	requires std::same_as<decltype(typ.m_attr), KdbAttr>;
@@ -602,7 +602,7 @@ template <typename T>
 	{ typ.write(buf) } -> std::same_as<WriteResult>;
 };
 //-------------------------------------------------------------------------------- read/write RegularAtom
-template <KdbReadableAtom T>
+template <KdbReadableIntegralAtom T>
 ReadResult readIntAtom(T & typ, ReadBuf & buf)
 {
 	if (!buf.cursorActive())
@@ -619,7 +619,7 @@ ReadResult readIntAtom(T & typ, ReadBuf & buf)
 	return ReadResult::RD_OK;
 }
 
-template <KdbWritableAtom T>
+template <KdbWritableIntegralAtom T>
 WriteResult writeIntAtom(T & typ, WriteBuf &buf)
 {
 	using E = decltype(typ.m_val);
@@ -638,7 +638,7 @@ WriteResult writeIntAtom(T & typ, WriteBuf &buf)
 	return WriteResult::WR_OK;
 }
 //-------------------------------------------------------------------------------- read/write RegularVector
-template<KdbVectorReader T>
+template<KdbIntegralVectorReader T>
 ReadResult readIntVector(T & typ, ReadBuf & buf)
 {
 	using E = std::decay<decltype(*typ.m_vec.begin())>::type; // https://stackoverflow.com/a/53259979/322304
@@ -664,7 +664,7 @@ ReadResult readIntVector(T & typ, ReadBuf & buf)
 	return (cap == typ.m_vec.size()) ? ReadResult::RD_OK : ReadResult::RD_INCOMPLETE;
 }
 
-template <KdbVectorWriter T>
+template <KdbIntegralVectorWriter T>
 WriteResult writeIntVector(const T & typ, WriteBuf & buf)
 {
 	using E = std::decay<decltype(*typ.m_vec.begin())>::type;
@@ -934,9 +934,8 @@ WriteResult KdbBoolAtom::write(WriteBuf & buf) const
 KdbList::KdbList(uint64_t cap, KdbAttr attr)
  : KdbBase(KdbType::LIST)
  , m_attr(attr)
- , m_vals(cap)
 {
-	m_vals.resize(0);
+	m_vals.reserve(cap);
 }
 
 void KdbList::push(std::unique_ptr<KdbBase> val)
@@ -1031,9 +1030,8 @@ template <typename T> uint64_t _vec_wire_sz(T vec)
 KdbBoolVector::KdbBoolVector(uint64_t cap, KdbAttr attr)
  : KdbBase(KdbType::BOOL_VECTOR)
  , m_attr(attr)
- , m_vec(cap)
 {
-	m_vec.resize(0);
+	m_vec.reserve(cap);
 }
 
 uint64_t KdbBoolVector::wireSz() const
@@ -1060,9 +1058,8 @@ WriteResult KdbBoolVector::write(WriteBuf & buf) const
 KdbGuidVector::KdbGuidVector(uint64_t cap, KdbAttr attr)
  : KdbBase(KdbType::GUID_VECTOR)
  , m_attr(attr)
- , m_vec(cap)
 {
-	m_vec.resize(0);
+	m_vec.reserve(cap);
 }
 
 uint64_t KdbGuidVector::wireSz() const
@@ -1097,9 +1094,8 @@ WriteResult KdbGuidVector::write(WriteBuf & buf) const
 KdbByteVector::KdbByteVector(uint64_t cap, KdbAttr attr)
  : KdbBase(KdbType::BYTE_VECTOR)
  , m_attr(attr)
- , m_vec(cap)
 {
-	m_vec.resize(0);
+	m_vec.reserve(cap);
 }
 
 uint64_t KdbByteVector::wireSz() const
@@ -1126,9 +1122,8 @@ WriteResult KdbByteVector::write(WriteBuf & buf) const
 KdbShortVector::KdbShortVector(uint64_t cap, KdbAttr attr)
  : KdbBase(KdbType::SHORT_VECTOR)
  , m_attr(attr)
- , m_vec(cap)
 {
-	m_vec.resize(0);
+	m_vec.reserve(cap);
 }
 
 uint64_t KdbShortVector::wireSz() const
@@ -1155,9 +1150,8 @@ WriteResult KdbShortVector::write(WriteBuf & buf) const
 KdbIntVector::KdbIntVector(uint64_t cap, KdbAttr attr)
  : KdbBase(KdbType::INT_VECTOR)
  , m_attr(attr)
- , m_vec(cap)
 {
-	m_vec.resize(0);
+	m_vec.reserve(cap);
 }
 
 KdbIntVector::KdbIntVector(const std::vector<int32_t> & vals, KdbAttr attr)
@@ -1326,22 +1320,25 @@ WriteResult KdbCharVector::write(WriteBuf & buf) const
 KdbSymbolVector::KdbSymbolVector(const std::vector<std::string_view> & vals, KdbAttr attr)
  : KdbBase(KdbType::SYMBOL_VECTOR)
  , m_attr(attr)
- , m_locs(vals.size())
- , m_data([](const std::vector<std::string_view> & v) {
-		size_t sz = 0;
-		for (uint64_t i = 0 ; i < v.size() ; i++) {
-			sz += v[i].size() + SZ_BYTE;
-		}
-		return sz;
- }(vals))
 {
-	m_locs.resize(0);
-	m_data.resize(0);
+	m_locs.reserve(vals.size());
+
+	// Annoyingly, we do two passes over the data, the first to initialise the m_locs
+	// vector (with offsets and lengths to provide O(1) access to the underlying data)
+	// and to sum the symbol lengths and reserve sufficient storage for the nose-to-tail
+	// symbol data (which we can then memcpy in "a one-er" to a network buffer)
+	size_t cap = 0;
 	for (uint64_t i = 0 ; i < vals.size() ; i++) {
 		size_t off = m_data.size();
 		size_t len = vals[i].size() + SZ_BYTE;
+		cap += len;
 		m_locs.emplace_back(off, len);
-		m_data.insert(m_data.end(), vals[i].data(), vals[i].data() + vals[i].size());
+	}
+
+	m_data.reserve(cap);
+
+	for (uint64_t i = 0 ; i < vals.size() ; i++) {
+		m_data.insert(m_data.end(), vals[i].data(), vals[i].data() + m_locs[i].c_len);
 		// since we can't be sure that each string_view is null-terminated:
 		m_data.push_back('\0');
 	}

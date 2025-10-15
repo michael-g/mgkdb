@@ -18,11 +18,11 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 #include "gtest/gtest.h"
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <cstddef> // size_t
-#include <sys/types.h> // off_t
+#include <cstddef>       // size_t
+#include <sys/types.h>   // off_t
 
-#include "KdbIoMockDefs.h"
-#include "../src/CircularBuffer.cpp"
+#include "MgIoMockDefs.h"
+#include "../src/MgCircularBuffer.cpp"
 
 #include <sys/mman.h>
 

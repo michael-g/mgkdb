@@ -14,8 +14,8 @@ You should have received a copy of the GNU Affero Public License along with The
 Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 */
 
-#ifndef __mg7x_KdbIoDefs__H__
-#define __mg7x_KdbIoDefs__H__
+#ifndef __mg7x_MgIoDefs__H__
+#define __mg7x_MgIoDefs__H__
 
 #pragma once
 

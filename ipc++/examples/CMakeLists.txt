@@ -17,3 +17,7 @@ target_compile_options(demo_circular_buffer PRIVATE -Wall)
 add_executable(subscribe_to_tp connect_to_kdb_lib.cpp subscribe_to_tp.cpp)
 target_link_libraries(subscribe_to_tp PRIVATE mgkdbipc)
 target_compile_options(subscribe_to_tp PRIVATE -Wall)
+
+add_executable(variadic_printer connect_to_kdb_lib.cpp variadic_printer.cpp)
+target_link_libraries(variadic_printer PRIVATE mgkdbipc)
+target_compile_options(variadic_printer PRIVATE -Wall)

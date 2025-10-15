@@ -24,7 +24,7 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 #include <tuple>        // std::ignore
 #include <utility>      // std::forward
 
-#include "CircularBuffer.h"
+#include "MgCircularBuffer.h"
 
 namespace mg7x {
 

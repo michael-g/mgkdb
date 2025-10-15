@@ -20,7 +20,7 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 #include <sys/eventfd.h> // args to eventfd()
 #include <sys/socket.h> // args to socket, struct addrinfo
 #include <netdb.h> // struct gaicb
-#include <arpa/inet.h> // inet_ntop
+#include <arpa/inet.h> // inet_ntop, sockaddr_in
 #include <string.h>
 #include <errno.h>
 

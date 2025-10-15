@@ -7,15 +7,7 @@ if (${CMAKE_BINARY_DIR} STREQUAL ${CMAKE_SOURCE_DIR})
 	message(FATAL_ERROR "Please create a separate build directory and call CMake again")
 endif()
 
-# speed up recompiling on unix with ccache
-find_program(CCACHE_PROGRAM ccache)
-if (CCACHE_PROGRAM)
-	message(STATUS "ccache found")
-	# Support Unix Makefiles and Ninja
-	set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
-endif()
-
-set(TARGET MgKdbIpc)
+set(TARGET MgIo)
 
 project(${TARGET} LANGUAGES CXX)
 
@@ -28,8 +20,6 @@ set(CMAKE_CXX_STANDARD 23)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
-
-option(SAVE_TEMPS "Save temporary files" ON)
 
 # https://cmake.org/pipermail/cmake/2008-September/023808.html
 IF(DEFINED CMAKE_BUILD_TYPE)
@@ -46,13 +36,7 @@ else()
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -g")
 endif()
 
-if(${SAVE_TEMPS})
-	add_compile_options(-save-temps)
-endif(${SAVE_TEMPS})
-
 add_subdirectory(src)
-add_subdirectory(app)
-add_subdirectory(examples)
 
 enable_testing()
 add_subdirectory(test)

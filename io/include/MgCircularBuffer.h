@@ -14,9 +14,9 @@ You should have received a copy of the GNU Affero Public License along with The
 Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 */
 
-#ifndef __mg7x_CircularBuffer__H__
-#define __mg7x_CircularBuffer__H__
-#include "KdbIoDefs.h"
+#ifndef __mg7x_MgCircularBuffer__H__
+#define __mg7x_MgCircularBuffer__H__
+#include "MgIoDefs.h"
 #pragma once
 
 #include <stddef.h> // size_t
@@ -53,6 +53,12 @@ public:
 	}
 	void* map_base() const noexcept {
 		return m_base;
+	}
+	uint64_t map_len() const noexcept {
+		return m_buf_len;
+	}
+	uint64_t magic_len() const noexcept {
+		return m_buf_len * 2;
 	}
 	void* read_ptr() const noexcept {
 		return static_cast<int8_t*>(m_base) + m_pos;

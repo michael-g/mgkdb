@@ -19,9 +19,9 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 #include <utility> // std::swap
 #include <print> // TODO REMOVEME
 
-#include "CircularBuffer.h"
+#include "MgCircularBuffer.h"
 
-#include "../src/CircularBuffer.cpp"
+#include "../src/MgCircularBuffer.cpp"
 
 namespace mg7x::test {
 

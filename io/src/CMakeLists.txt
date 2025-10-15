@@ -8,18 +8,11 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 # C.f. https://cmake.org/cmake/help/latest/command/add_library.html#object-libraries
 # and https://stackoverflow.com/a/29824424/322304
 #
-# add_library(objlib OBJECT KdbType.cpp)
+# add_library(objlib OBJECT CircularBuffer.cpp)
 # set_property(TARGET objlib PROPERTY POSITION_INDEPENDENT_CODE 1)
 # target_compile_options(objlib PRIVATE -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-variable)
-# add_library(mgkdbipc        SHARED $<TARGET_OBJECTS:objlib>)
-# add_library(mgkdbipc_static STATIC $<TARGET_OBJECTS:objlib>)
+# add_library(mgio        SHARED $<TARGET_OBJECTS:objlib>)
+# add_library(mgio_static STATIC $<TARGET_OBJECTS:objlib>)
 
-add_library(mgio STATIC IMPORTED)
-set_target_properties(mgio PROPERTIES
-  IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/../io/lib/libmgio.a"
-  INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/../io/include"
-)
-
-add_library(mgkdbipc STATIC KdbType.cpp)
-target_link_libraries(mgkdbipc PUBLIC mgio)
-target_compile_options(mgkdbipc PRIVATE -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-variable -fPIC)
+add_library(mgio STATIC MgCircularBuffer.cpp)
+target_compile_options(mgio PRIVATE -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-variable -fPIC)

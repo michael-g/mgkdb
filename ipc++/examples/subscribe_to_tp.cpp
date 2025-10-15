@@ -17,8 +17,8 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 #include <stdlib.h> // exit, EXIT_FAILURE
 
 #include "KdbType.h"
-#include "KdbIoDefs.h" // for the mg7x::io functions; thin wrappers around network calls for testing
-#include "CircularBuffer.h"
+#include "MgIoDefs.h" // for the mg7x::io functions; thin wrappers around network calls for testing
+#include "MgCircularBuffer.h"
 
 #include <string.h>  // strerror
 

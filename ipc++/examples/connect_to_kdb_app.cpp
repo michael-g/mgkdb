@@ -18,7 +18,7 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 #include <stdint.h> // uint16_t
 
 #include "KdbType.h"
-#include "KdbIoDefs.h"
+#include "MgIoDefs.h"
 
 #include <algorithm> // copy
 #include <vector>
