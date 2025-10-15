@@ -43,8 +43,22 @@
  ;.mok.log "Test FAILURE: ",(.Q.s1 F),": error is '",E,"\n",.Q.sbt btr
  }
 
+.mok.ilog:{[N;M]
+  `.mok.logged insert (N;M)
+ }
+
+.mok.mockLogger:{[N]
+  (` sv (`.log;N)) set .mok.ilog upper N
+ }
+
+.mok.setUp:{
+  .mok.logged:flip`name`arg!enlist each (`;::)
+ ;.mok.mockLogger each `trace`debug`info`warn`error
+ }
+
 .mok.runTest:{[S;F]
-  .mok.log "Running ",string F
+  .mok.setUp[]
+ ;.mok.log "Running ",string F
  ;.Q.trp[F;::;.mok.testFailed F]
  ;
  }
@@ -68,10 +82,14 @@
  ;
  }
 
+.mok.ast.fail:{[M]
+  'M
+ }
 .mok.ast.eq:{[L;R]
-  if[not L = R
-    ;'"not equal: ",(.Q.s1 L)," != ",.Q.s1 R
-    ]
+  if[not L = R;.mok.ast.fail "not equal: ",(.Q.s1 L)," != ",.Q.s1 R]
+ }
+.mok.ast.is:{[L;R]
+  if[not L ~ R;.mok.ast.fail "not identical: ",(.Q.s1 L)," !~ ",.Q.s1 R]
  }
 
 .mok.init[];

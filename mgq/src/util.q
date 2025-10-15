@@ -14,7 +14,7 @@
 
 .utl.init:{
   .utl.tid:0
- ;.utl.conns:1!flip`fd`url`usr`dfn!enlist each (0Ni;`;`;::)
+ ;.utl.conns:1!flip`fd`url`usr`rgs!enlist each (0Ni;`;`;::)
  ;.utl.timers:1!flip`id`millis`rpt`fn`nxttp!"JIB*P"$\:()
  ;.utl.cbks:flip`fd`typ`cbk!enlist each (0Ni;`;::)
  ;.utl.zpcs:()
@@ -22,6 +22,10 @@
  ;.z.pc:.utl.zpc
  ;.z.po:.utl.zpo
  ;.z.ts:.utl.zts
+  // TODO: implement command line switch to disable .chkArity in prod
+ ;if[0b
+    ;.utl.chkArity:{[N;F]}
+    ]
  }
 
 .utl.zw:{.z.w}
@@ -33,6 +37,9 @@
 .utl.zP:{.z.P}
 .utl.zn:{.z.n}
 .utl.zN:{.z.N}
+.utl.zu:{.z.u}
+.utl.za:{.z.a}
+.utl.zi:{.z.i}
 
 .utl.arity:{[F]
    $[-11h~typ:type F                                                           //   if| F is a symbol atom
@@ -43,9 +50,20 @@
     ;'"expected type 104"                                                      // then| protest
     ;enlist~first lst:value F                                                  // elif| we are dealing with an elided list
     ;(.z.s lst 1) - count where not ![-2;]~/:attr each 2_ lst                  // then| count elided args where they produce an identity transform
-    ;(.z.s lst 0) - count where 101h<>type each 1_ lst                         // else| count where a standard projection has non-nil args
+    ;(.z.s lst 0) - count where not (::)~/:1_ lst                              // else| count where a standard projection has non-nil args
     ]
  };
+
+.utl.chkArity:{[N;F]
+  if[N<>num:.utl.arity F
+    ;'"Expected ",(string N)," arguments but found ",string num
+    ]
+ }
+
+//--------------------------------------------------------------------------- IPC functions
+.utl.onZpoCbkErr:{[H;E;B]
+  .log.error("Failed in on-open callback for FD ";H;": ";E;"\n";.Q.sbt B)
+ }
 
 .utl.onZpcCbkErr:{[H;E;B]
   .log.error("Failed in on-close callback for FD ";H;": ";E;"\n";.Q.sbt B)
@@ -54,14 +72,41 @@
 .utl.zpc:{[H]
   .log.debug("Have socket-close event for FD ";H)
  ;exec .Q.trp[;H;.utl.onZpcCbkErr H] each cbk from .utl.cbks where fd = H, typ=`zpc
+ ;.Q.trp[;H;.utl.onZpcCbkErr H] each .utl.zpcs
  ;delete from `.utl.cbks where fd = H
  ;delete from `.utl.conns where fd = H
  }
 
-.utl.zpo:{[H]
- // TODO
+.utl.toIpv4:{[A]
+  $[2130706433i~A
+   ;`localhost
+   ;0i~A
+   ;`unix
+   ;`$"."sv string 6h$0x0 vs A
+   ]
  }
 
+.utl.zpo:{[H]
+  .log.info("Have socket-open event with FD ";H)
+ ;`.utl.conns upsert (H;.utl.toIpv4 .utl.za[];.utl.zu[];::)
+ ;.Q.trp[;H;.utl.onZpoCbkErr H] each .utl.zpos
+ }
+
+.utl.addFdPcCbk:{[H;F]
+  `.utl.cbks insert (H;`zpc;F)
+ }
+
+.utl.addPcCbk:{[F]
+  .utl.zpcs,:enlist F
+ }
+
+// U: url hsym; T: timeout; R: retry -16 -17 -18 -19h; O: on-open required monadic 100 104h
+// C: on-close optional monadic 100 104h
+.utl.hopen:{[U;T;R;O;C]
+  // `.utl.conns insert (-1;U;`;`timeout`retry`open`close!(T;R;O;C))
+ }
+
+//--------------------------------------------------------------------------- env helpers
 // Look for file F in a path-like environment variable E
 // E: env-var -11h; F: full file name 10h
 .utl.pathFind:{[E;F]
