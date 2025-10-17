@@ -18,7 +18,7 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 #include <coroutine>
 #include <string.h>
 
-#include "KdbIoDefs.h"
+#include "MgIoDefs.h"
 #include "mg_fmt_defs.h"
 #include "mg_coro_epoll.h"
 

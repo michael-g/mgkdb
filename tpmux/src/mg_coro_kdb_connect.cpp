@@ -17,7 +17,7 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 #include <string.h>
 
 #include "mg_coro_domain_obj.h"
-#include "KdbIoDefs.h"
+#include "MgIoDefs.h"
 #include "mg_io.h"
 #include "mg_coro_task.h"
 #include "mg_coro_epoll.h"

@@ -34,7 +34,7 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 #include "mg_coro_task.h"
 
 #include "KdbType.h"
-#include "KdbIoDefs.h"
+#include "MgIoDefs.h"
 
 namespace mg7x {
 

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.28)
 
 # prohibit in-source-builds
 if (${CMAKE_BINARY_DIR} STREQUAL ${CMAKE_SOURCE_DIR})
@@ -29,10 +29,10 @@ ELSE()
 ENDIF()
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
-	message(" * Using DEBUG build, setting -O0 -g")
+	message("   Using DEBUG build, setting -O0 -g")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g")
 else()
-	message(" * Using RELEASE build, setting -O3")
+	message("   Using RELEASE build, setting -O3")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -g")
 endif()
 

@@ -1,18 +1,23 @@
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
-# To build both a static and dynamic library you can uncomment the following lines.
-# You will need to comment-out the add_library instruction that creates the static
-# (and non-PIC) library or you'll get a naming collision.
-#
-# C.f. https://cmake.org/cmake/help/latest/command/add_library.html#object-libraries
-# and https://stackoverflow.com/a/29824424/322304
-#
-# add_library(objlib OBJECT CircularBuffer.cpp)
-# set_property(TARGET objlib PROPERTY POSITION_INDEPENDENT_CODE 1)
-# target_compile_options(objlib PRIVATE -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-variable)
-# add_library(mgio        SHARED $<TARGET_OBJECTS:objlib>)
-# add_library(mgio_static STATIC $<TARGET_OBJECTS:objlib>)
-
 add_library(mgio STATIC MgCircularBuffer.cpp)
+target_sources(mgio PUBLIC
+  FILE_SET public_headers
+  TYPE HEADERS
+  BASE_DIRS "${PROJECT_SOURCE_DIR}/include"
+  FILES
+    "../include/MgCircularBuffer.h"
+    "../include/MgIoDefs.h"
+ )
+
 target_compile_options(mgio PRIVATE -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-variable -fPIC)
+
+install(TARGETS mgio
+  FILE_SET
+    public_headers
+  ARCHIVE
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  INCLUDES
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+ )

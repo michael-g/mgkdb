@@ -23,3 +23,20 @@ set_target_properties(mgio PROPERTIES
 add_library(mgkdbipc STATIC KdbType.cpp)
 target_link_libraries(mgkdbipc PUBLIC mgio)
 target_compile_options(mgkdbipc PRIVATE -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-variable -fPIC)
+target_sources(mgkdbipc PUBLIC
+  FILE_SET public_headers
+  TYPE HEADERS
+  BASE_DIRS
+    "${PROJECT_SOURCE_DIR}/include"
+  FILES
+    "../include/KdbType.h"
+ )
+
+install(TARGETS mgkdbipc
+  FILE_SET
+    public_headers
+  ARCHIVE
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  INCLUDES
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+ )

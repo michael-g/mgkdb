@@ -14,7 +14,7 @@ You should have received a copy of the GNU Affero Public License along with The
 Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 */
 
-#include "KdbIoDefs.h"
+#include "MgIoDefs.h"
 #include "KdbType.h"
 
 #include "mg_coro_epoll.h"

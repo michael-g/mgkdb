@@ -29,7 +29,7 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 
 #include "mg_coro_domain_obj.h"
 #include "mg_fmt_defs.h"
-#include "KdbIoDefs.h"
+#include "MgIoDefs.h"
 #include "mg_io.h"
 #include "mg_coro_task.h"
 #include "mg_coro_epoll.h"

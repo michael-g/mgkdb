@@ -180,6 +180,8 @@ unsigned char* base64_decode(const unsigned char *src, size_t len, size_t *out_l
 	return out;
 }
 
+// Jouni Malinen's Base64 encoding/decoding (RFC1341) library excerpt ends
+
 union mg_pun {
 	void *ptr;
 	int8_t ary[sizeof(void*)];

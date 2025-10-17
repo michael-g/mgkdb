@@ -27,7 +27,7 @@ Library. If not, see https://www.gnu.org/licenses/agpl.txt.
 #include <algorithm> // std::copy
 #include <ranges> // views::join_with
 
-#include "KdbIoDefs.h"
+#include "MgIoDefs.h"
 #include "KdbType.h"
 
 #include "mg_coro_domain_obj.h"
