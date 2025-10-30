@@ -14,12 +14,18 @@
 
 .utl.tst.arity:{
   .mok.ast.eq[1] .utl.arity .utl.arity
- ;.mok.ast.eq[5] .utl.arity .mok.register
- ;.mok.ast.eq[3] .utl.arity .mok.register[1;;2]
- ;.mok.ast.eq[3] .utl.arity .mok.register[`;;`]
- ;.mok.ast.eq[4] .utl.arity (`.mok.register;;;;4;)
- ;.mok.ast.eq[3] .utl.arity (`.mok.register;1;;;4;)
+ ;.mok.ast.eq[5] .utl.arity .Q.dsftg
+ ;.mok.ast.eq[3] .utl.arity .Q.dsftg[1;;2]
+ ;.mok.ast.eq[3] .utl.arity .Q.dsftg[`;;`]
+ ;.mok.ast.eq[4] .utl.arity (`.Q.dsftg;;;;4;)
+ ;.mok.ast.eq[3] .utl.arity (`.Q.dsftg;1;;;4;)
  ;
+ }
+
+.utl.tst.chkArity:{
+  msg:.[.utl.chkArity;(1;{[X;Y]});{x}]
+ ;.mok.ast.is["Expected 1 arguments but found 2"] msg
+ ;.mok.ast.is[1] .utl.arity `.utl.arity
  }
 
 .utl.tst.zpcNotifiesCallbackAndRemovesEntries:{
@@ -53,6 +59,55 @@
  ;msg:exec first arg from .mok.logged where not null name                         // retrieve the message what was logged
  ;.mok.ast.eq[6] count msg                                                        // assert its rough structure
  ;.mok.ast.is[(3i;"fail")] msg 1 3                                                // assert that elements [1] and [3] occur as expected
+ }
+
+.utl.tst.setTimeoutUnsetsTimerWhenNoTimersRegistered:{
+  .utl.tst.rgs:0Nj
+ ;.utl.t:{[T] .utl.tst.rgs:T }
+ ;.utl.init[]
+ ;.utl.setTimeout[]
+ ;.mok.ast.is[0j] .utl.tst.rgs
+ }
+
+.utl.tst.setTimeoutWhenTimerShouldHaveFired:{
+  .utl.tst.rgs:0Nj
+ ;.utl.t:{[T] .utl.tst.rgs:T }
+ ;.utl.init[]
+ ;.utl.zp:{ 2025.10.20 + 11:23 }
+ ;`.utl.timers upsert (1;19h$0;0Nt;{};2025.10.20 + 11:23)
+ ;.utl.setTimeout[]
+ ;.mok.ast.is[1j] .utl.tst.rgs
+ ;.utl.tst.rgs:0Nj
+ ;.utl.zp:{ 2025.10.20 + 11:24 }
+ ;.utl.setTimeout[]
+ ;.mok.ast.is[1j] .utl.tst.rgs
+ }
+
+.utl.tst.setTimeoutWhenTimerFiresInTheFuture:{
+  .utl.tst.rgs:0Nj
+ ;.utl.t:{[T] .utl.tst.rgs:T }
+ ;.utl.init[]
+ ;.utl.zp:{ 2025.10.20 + 11:23 }
+ ;`.utl.timers upsert (1;19h$0;0Nt;{};2025.10.20 + 11:24)
+ ;.utl.setTimeout[]
+ ;.mok.ast.eq[`int$`time$`minute$1] .utl.tst.rgs
+ }
+
+.utl.tst.addTimer:{
+  .utl.init[]
+ ;.utl.tst.rgs:0
+ ;.utl.setTimeout:{ .utl.tst.rgs+:1 }
+ ;.utl.zp:{ 2025.10.20 + 11:11 }
+ ;.utl.tid:10j
+ ;.utl.addTimer[{};19h$00:01;0Nt]
+ ;.mok.ast.eq[1] count .utl.timers
+ ;row:first 0!.utl.timers
+ ;.mok.ast.is[11] row`id
+ ;.mok.ast.is[19h$00:01] row`millis
+ ;.mok.ast.is[0Nt] row`rpt
+ ;.mok.ast.is[{}] row`fn
+ ;.mok.ast.is[2025.10.20 + 11:12] row`nxttp
+ ;.mok.ast.eq[1] .utl.tst.rgs
  }
 
 .mok.test[`util.q;`.utl];

@@ -14,12 +14,13 @@
 
 
 .mok.init:{
- ;.mok.dir:first tmp:` vs hsym`$first system "readlink -f ",string .z.f
+  .mok.dir:first tmp:` vs hsym`$first system "readlink -f ",string .z.f
  ;.mok.tst:tmp where(tmp:(key .mok.dir) except last tmp) like "*.q"
+ ;.mok.tst:.mok.tst except `test.q
  ;.mok.src:` sv (first` vs .mok.dir;`src)
  ;$[`tst.names in key rgs:.Q.opt .z.x
    ;.mok.run each `$","vs first rgs`tst.names
-   ;.mok.run each .mok.src
+   ;.mok.run each .mok.tst
    ]
  }
 
@@ -32,11 +33,7 @@
   .mok.src,$[-11h~type F;F;`$F]
  }
 
-.mok.register:{[S;F;M;N;D]
-  .mok.log "Loaded source ",string S
- ;.mok.runTest[S] each F
- ;
- }
+.mok.register:{[M;N;D]}
 
 .mok.testFailed:{[F;E;B]
   btr:$[5<count B;5#B;B]
@@ -57,7 +54,8 @@
  }
 
 .mok.runTest:{[S;F]
-  .mok.setUp[]
+  system"l ",1_ string S
+ ;.mok.setUp[]
  ;.mok.log "Running ",string F
  ;.Q.trp[F;::;.mok.testFailed F]
  ;
@@ -65,11 +63,11 @@
 
 // F: target script -11h; N that script's namespace -11h
 .mok.test:{[F;N]
- ;src:` sv .mok.src,F
+  src:` sv .mok.src,F
  ;fns:key value ` sv dir:N,`tst
  ;fns:` sv/: dir,/:fns except `
- ;.boot.register:.mok.register[src;fns]
- ;system"l ",1_ string src
+ ;.boot.register:.mok.register
+ ;.mok.runTest[src] each fns
  }
 
 .mok.run:{[F]
@@ -77,7 +75,7 @@
  ;if[not F in .mok.tst
     ;'"No such test script: ",tst
     ]
- ;.mok.log "Running script ",tst
+ ;.mok.log "Loading script ",tst
  ;system"l ",1_ tst
  ;
  }

@@ -15,7 +15,7 @@
 .utl.init:{
   .utl.tid:0
  ;.utl.conns:1!flip`fd`url`usr`rgs!enlist each (0Ni;`;`;::)
- ;.utl.timers:1!flip`id`millis`rpt`fn`nxttp!"JIB*P"$\:()
+ ;.utl.timers:1!flip`id`millis`rpt`fn`nxttp!"JTT*P"$\:()
  ;.utl.cbks:flip`fd`typ`cbk!enlist each (0Ni;`;::)
  ;.utl.zpcs:()
  ;.utl.zpos:()
@@ -40,6 +40,9 @@
 .utl.zu:{.z.u}
 .utl.za:{.z.a}
 .utl.zi:{.z.i}
+.utl.t:{[T]
+  value"\\t ",$[10h~type T;T;string T]
+ }
 
 .utl.arity:{[F]
    $[-11h~typ:type F                                                           //   if| F is a symbol atom
@@ -100,10 +103,36 @@
   .utl.zpcs,:enlist F
  }
 
-// U: url hsym; T: timeout; R: retry -16 -17 -18 -19h; O: on-open required monadic 100 104h
-// C: on-close optional monadic 100 104h
+.utl.onHopenCbkErr:{[H;E;B]
+  .log.error("While invoking callback for FD ";H;": ";E;"\n ",.Q.sbt B)
+ }
+
+// U: url hsym; T: timeout -19h; R: retry -19h; O: on-open monadic func, required;
+// C: on-close monadic, optional; I: timer-ID -7h
+.utl.hopen1:{[U;T;R;O;C;I]
+  cfd:@[hopen;(U;7h$T);{x}]
+ ;if[10h~type cfd
+    ;if[null R
+       ;delete from `.utl.timers where id=I
+       ]
+    ;.log.debug("Failed to open connection to ";U;": '";cfd)
+    ;:0b
+    ]
+ ;delete from `.utl.timers where id=I
+ ;`.utl.conns upsert (cfd;U;.utl.zu[];`T`R`O`C!(T;R;O;C))
+ ;.Q.trp[O;cfd;.utl.onHopenCbkErr cfd]
+ }
+
+// U: url hsym; T: timeout -19h; R: retry -19h or 0Nt; O: on-open monadic func, required;
+// C: on-close monadic, optional (use :: to ignore)
 .utl.hopen:{[U;T;R;O;C]
-  // `.utl.conns insert (-1;U;`;`timeout`retry`open`close!(T;R;O;C))
+  .utl.chkArity[1;O]
+ ;if[not(::)~C
+    ;.utl.chkArity[1;C]
+    ]
+ ;if[-19h<>type T;'"T.type"]
+ ;if[-19h<>type R;'"R.type"]
+ ;.utl.addTimer[(`.utl.hopen1;U;T;R;O;C;);19h$0;R]
  }
 
 //--------------------------------------------------------------------------- env helpers
@@ -113,20 +142,30 @@
   system"find -H ${",(string E),"//:/ } -mindepth 1 -maxdepth 1 -name ",F
  }
 
+//--------------------------------------------------------------------------- eval helpers
+.utl.eval1:{[F;A;K]
+  $[$[104h~type F;enlist~first value F;0b]
+   ;.Q.trp[value;F @ A;K]
+   ;.Q.trp[F;A;K]
+   ]
+ }
+
 //--------------------------------------------------------------------------- timers
 .utl.onTimerFail:{[E;B]
   .log.error("While executing timer: '";E;"\n:";.Q.sbt B)
  }
 
-.utl.execTimer:{[K;M;R;F;X]
-  .Q.trp[F;K;.utl.onTimerFail]
+// Invoked with the values from a timer-row in .utl.timers
+// I: timer ID; M: millis; R: rpt; F: func; X nxttp
+.utl.execTimer:{[I;M;R;F;X]
+  .utl.eval1[F;I;.utl.onTimerFail]
  ;$[R
-   ;update nxttp:(.z.p + 1000000 * M) from `.utl.timers where id = K
-   ;not count tp:exec nxttp from .utl.timers where id=K
+   ;update nxttp:(.z.p + 1000000 * M) from `.utl.timers where id=I
+   ;not count tp:exec nxttp from .utl.timers where id=I
    ;0
    ;X <> first tp
-   ;.log.debug("Leaving timer with id ";K)
-   ;[delete from `.utl.timers where id = K;.log.debug("Cleared timer with id ";K)]
+   ;.log.debug("Leaving timer with id ";I)
+   ;[delete from `.utl.timers where id = I;.log.debug("Cleared timer with id ";I)]
    ]
  ;
  }
@@ -138,18 +177,21 @@
  }
 
 .utl.setTimeout:{
-  $[not count .utl.timers
-   ;system "t 0"
-   ;(19h$zp:.z.p) >= 19h$tp:(exec from .utl.timers where nxttp = min nxttp)`nxttp
-   ;system "t 1"
-   ;system "t ",string $[0=tp:6h$19h$tp-zp;1;tp]
+  $[not count .utl.timers                                                 //   if .timers is empty
+   ;.utl.t 0                                                              // then clear the timeout
+   ;(now:.utl.zp[]) >= nxt:exec min nxttp from .utl.timers                // elif a timer should have fired or be firing now
+   ;.utl.t 1                                                              // then set the smallest timeout possible
+   ;.utl.t $[0=ivl:6h$19h$nxt-now;1;ivl]                                  // else set a timeout to fire in N millseconds
    ]
  ;
  }
 
-// F: monadic function/projection; M: millis -6h; R: repeat 1h
+// Simple timer system offering time-til-initial-fire and repeat-at-interval controls. "Invokable" F
+// is ideally an elided list, e.g. (`.eg.test;1;2;3;), where the missing argument is provided as the
+// timer-ID, so it can be cancelled easily.
+// F: monadic function/projection; M: millis -19h; R: repeat -19h
 .utl.addTimer:{[F;M;R]
-  `.utl.timers upsert (.utl.tid+:1;M;R;F;.utl.zp[] + 1000000 * M)
+  `.utl.timers upsert (.utl.tid+:1;M;R;F;.utl.zp[] + M)
  ;.utl.setTimeout[]
  ;
  }

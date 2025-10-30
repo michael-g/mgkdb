@@ -115,7 +115,7 @@
  ;.log.info("authenticated user ";S;" for service ";T;" on FD ";cfd)
  ;`.krb.conns upsert (cfd;S;T;.web.ttlFromSecs V;::;"I")
  ;if[count K
-    ;.utl.addTimer[.krb.sendToken[cfd;K;];0i;0b]
+    ;.utl.addTimer[(`.krb.sendToken;cfd;K;);19h$0;0Nt]
     ]
  ;1b
  }
