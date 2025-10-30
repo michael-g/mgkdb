@@ -113,7 +113,8 @@ enum class KdbType
 	BINARY_PRIMITIVE  = 102,
 	TERNARY_PRIMITIVE = 103,
 	PROJECTION        = 104,
-	UNSET             = 127,
+	STEP_DICT         = 127,
+	_UNSET_           = 256,
 };
 
 inline bool operator==(const KdbType & lhs, int8_t rhs) noexcept
@@ -1243,6 +1244,7 @@ template<KdbColCapable T>
 
 
 //-------------------------------------------------------------------------------- KdbDict
+//-------------------------------------------------------------------------------- KdbStepDict
 
 struct KdbDict : public KdbBase
 {
@@ -1295,7 +1297,6 @@ template <typename T> requires KdbColCapable<T>
 	else
 		*ptr = reinterpret_cast<T*>(m_vals.get());
 }
-
 //-------------------------------------------------------------------------------- KdbFunction
 struct KdbFunction : public KdbBase
 {
@@ -1921,7 +1922,8 @@ struct std::formatter<mg7x::KdbType>
 			case mg7x::KdbType::BINARY_PRIMITIVE:      return std::format_to(ctx.out(), "BINARY_PRIMITIVE");
 			case mg7x::KdbType::TERNARY_PRIMITIVE:     return std::format_to(ctx.out(), "TERNARY_PRIMITIVE");
 			case mg7x::KdbType::PROJECTION:            return std::format_to(ctx.out(), "PROJECTION");
-			case mg7x::KdbType::UNSET:                 return std::format_to(ctx.out(), "<unset>");
+			case mg7x::KdbType::_UNSET_:               return std::format_to(ctx.out(), "<unset>");
+			case mg7x::KdbType::STEP_DICT:             return std::format_to(ctx.out(), "STEP_DICT");
 			default:                                   return std::format_to(ctx.out(), "MISSING_KdbType_CONVERSION");
 		}
 	}
@@ -1988,7 +1990,7 @@ struct std::formatter<mg7x::ReadMsgResult>
 	template<class FormatContext> auto format(const mg7x::ReadMsgResult & rmr, FormatContext & ctx) const
 	{
 		mg7x::KdbBase *msg = rmr.message.get();
-		mg7x::KdbType typ = (nullptr == msg) ? mg7x::KdbType::UNSET : msg->m_typ;
+		mg7x::KdbType typ = (nullptr == msg) ? mg7x::KdbType::_UNSET_ : msg->m_typ;
 		return std::format_to(ctx.out(), "({};{};{})", rmr.msg_typ, rmr.result, typ);
 	}
 
@@ -2047,6 +2049,7 @@ struct std::formatter<Derived, CharT> {
 			case mg7x::KdbType::BINARY_PRIMITIVE:      return std::format_to(ctx.out(), "{}", dynamic_cast<const mg7x::KdbBinaryPrimitive&>(obj));
 			case mg7x::KdbType::TERNARY_PRIMITIVE:     return std::format_to(ctx.out(), "{}", dynamic_cast<const mg7x::KdbTernaryPrimitive&>(obj));
 			case mg7x::KdbType::PROJECTION:            return std::format_to(ctx.out(), "{}", dynamic_cast<const mg7x::KdbProjection&>(obj));
+			case mg7x::KdbType::STEP_DICT:             return std::format_to(ctx.out(), "{}", dynamic_cast<const mg7x::KdbDict&>(obj));
 			default:                                   return std::format_to(ctx.out(), "('`MISSING_CONVERSION)");
 		}
 	}
@@ -2557,6 +2560,9 @@ struct std::formatter<mg7x::KdbDict>
 	template<class FormatContext> auto format(const mg7x::KdbDict & dct, FormatContext & ctx) const
 	{
 		if (dct.getKeyType().has_value() && dct.getValueType().has_value()) {
+			// doesn't yet tag step-dictionaries properly as `s#. To implement that will take a new,
+			// discrete function specifically for step-dictionaries ... or there will be a KdbStepDict
+			// type; I haven't decided ;)
 			return std::format_to(ctx.out(), "({}!{})", *dct.getKeys(), *dct.getValues());
 		}
 		return std::format_to(ctx.out(), "(null!null)");

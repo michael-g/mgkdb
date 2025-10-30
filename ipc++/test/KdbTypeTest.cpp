@@ -552,6 +552,16 @@ TEST(KdbTypeTest, TestKdbDict)
 
 }
 
+TEST(KdbTypeTest, TestKdbStepDict)
+{
+	// q)8_-8!`s#0 5 10i!0 50 100i
+	// 0x7f06010300000000000000050000000a000000060003000000000000003200000064000000
+	const char *hex = "0x7f06010300000000000000050000000a000000060003000000000000003200000064000000";
+	// doesn't yet have the sorted-attribute, unfortunately
+	const char *exp = "(0 5 10i!0 50 100i)";
+	std::ignore = testReadAndStr<KdbDict>(hex, exp);
+}
+
 TEST(KdbTypeTest, TestKdbTable)
 {
 	// 8_-8!tbl:flip`sym`price`size!(`VOD.L`AZN.L;100 101.;200 400)

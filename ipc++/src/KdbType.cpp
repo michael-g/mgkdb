@@ -474,6 +474,7 @@ ReadResult newInstance(ReadBuf & buf, KdbBase **ptr)
 			case KdbType::BINARY_PRIMITIVE:    return newAtomFromType<KdbBinaryPrimitive>(buf, ptr);
 			case KdbType::TERNARY_PRIMITIVE:   return newAtomFromType<KdbTernaryPrimitive>(buf, ptr);
 			case KdbType::PROJECTION:          return KdbProjection::alloc(buf, ptr);
+			case KdbType::STEP_DICT:           return newAtomFromType<KdbDict>(buf, ptr);
 
 			default:
 				std::cerr << "'nyi atom-type " << static_cast<int32_t>(typ_i8);
@@ -2322,6 +2323,7 @@ static int64_t msg_len_vary(const int8_t *src, const uint64_t rem)
 		case KdbType::TABLE:
 			return 2 + msg_len_vary(src + 2, rem - 2);
 		case KdbType::DICT:
+		case KdbType::STEP_DICT:
 			if (0 > (len = KdbUtil::ipcPayloadLen(src + 1, rem - 1)))
 				return len;
 			if (0 > (tmp = KdbUtil::ipcPayloadLen(src + 1, rem - 1)))
