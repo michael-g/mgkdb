@@ -22,3 +22,5 @@ add_subdirectory(kx_systems)
 add_subdirectory(ipc++)
 add_subdirectory(krb5)
 add_subdirectory(log_filter)
+# Under testing/dev
+# add_subdirectory(tpmux)
