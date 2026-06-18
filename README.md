@@ -3,7 +3,7 @@ This repository contains libraries and utilities I've developed for use with kdb
 
 ### C++ KDB IPC library
 
-The centrepiece is the [**ipc++**](src/ipc++) project which provides a strongly-typed C++23 KDB IPC library, with other goodies included. You get things like an IPC-reader and writer, types like `KdbSymbolAtom` and `KdbUnaryPrimitive`, [example](src/ipc++/examples) applications as well as utilities to scan on-disk KDB tickerplant log-files. 
+The centrepiece is the [**ipc++**](src/ipc++) project which provides a strongly-typed C++23 KDB IPC library, with other goodies included. You get things like an IPC-reader and writer, types like `KdbSymbolAtom` and `KdbUnaryPrimitive`, [example](src/examples) applications as well as utilities to scan on-disk KDB tickerplant log-files. 
 
 ### Javascript KDB IPC library
 

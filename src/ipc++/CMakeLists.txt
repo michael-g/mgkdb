@@ -15,7 +15,5 @@ target_link_libraries(MgKdbIpcpp
 
 mg_cmake_install(LIB_NAME MgKdbIpcpp)
 
-add_subdirectory(examples)
-
 #------------------------------------------------------------------------- Tests
 add_subdirectory(test)
