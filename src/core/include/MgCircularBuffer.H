@@ -15,6 +15,7 @@
 #ifndef MG_INC_MG_CIRCULAR_BUFFER_H
 #define MG_INC_MG_CIRCULAR_BUFFER_H
 #include "MgIoDefs.H"
+#include "MgMapTypes.H"
 #pragma once
 
 #include <stddef.h> // size_t
@@ -25,45 +26,55 @@ namespace mg7x
 
 class CircularBuffer
 {
-	void    *m_base{nullptr};
-	uint64_t m_buf_len;
-	int      m_mem_fd;
+	Mapping  m_mapping;
+	int      m_mem_fd{-1};
 	uint64_t m_pos{0};
 	uint64_t m_len{0};
 
+  void move_from(CircularBuffer && rhs) noexcept
+  {
+    m_mapping.unmap();
+    m_mapping = std::move(rhs.m_mapping);
+    m_mem_fd = std::exchange(rhs.m_mem_fd, -1);
+    m_pos = std::exchange(rhs.m_pos, 0);
+    m_len = std::exchange(rhs.m_len, 0);
+  }
+
 public:
-	CircularBuffer(void *base, uint64_t buf_len, int mem_fd)
-	 : m_base(base)
-	 , m_buf_len(buf_len)
+	CircularBuffer(Address base, PageCount pgs, int mem_fd)
+	 : m_mapping{base, pgs}
 	 , m_mem_fd(mem_fd)
 	{}
 
 	~CircularBuffer() {
-		if (m_base) {
-			std::ignore = io::munmap(static_cast<int8_t*>(m_base) + m_buf_len, m_buf_len);
-			std::ignore = io::munmap(m_base, m_buf_len);
+		if (m_mem_fd >= 0) {
 			std::ignore = io::close(m_mem_fd);
 		}
-		m_base = nullptr;
-		m_mem_fd = 0;
+		m_mem_fd = -1;
 	}
+
+  CircularBuffer(CircularBuffer && rhs) noexcept { move_from(std::move(rhs)); }
+  void operator=(CircularBuffer && rhs) noexcept { move_from(std::move(rhs)); }
+  CircularBuffer(CircularBuffer const &) = delete;
+  void operator=(CircularBuffer const &) = delete;
+
 	bool is_mapped() const noexcept {
-		return nullptr != m_base;
+		return !m_mapping.base_addr().is_nil();
 	}
 	void* map_base() const noexcept {
-		return m_base;
+		return m_mapping.base_addr().as_ptr<void*>();
 	}
 	uint64_t map_len() const noexcept {
-		return m_buf_len;
+		return m_mapping.extent().ext64() / 2;
 	}
 	uint64_t magic_len() const noexcept {
-		return m_buf_len * 2;
+		return m_mapping.extent().ext64();
 	}
 	void* read_ptr() const noexcept {
-		return static_cast<int8_t*>(m_base) + m_pos;
+		return m_mapping.addr_at(m_pos).as_ptr<void*>();
 	}
 	void* write_ptr() const noexcept {
-		return static_cast<int8_t*>(m_base) + write_offset();
+    return m_mapping.addr_at(write_offset()).as_ptr<void*>();
 	}
   uint64_t write_offset() const noexcept {
     return m_pos + m_len;
@@ -75,7 +86,7 @@ public:
 		return m_len;
 	}
 	uint64_t writeable() const noexcept {
-		return m_buf_len - m_len;
+		return map_len() - m_len;
 	}
 	void clear() noexcept {
 		m_pos = 0;
@@ -85,8 +96,8 @@ public:
 		// std::print(" CIRC: .set_consumed: count {}, m_pos {}/{}/{}, m_len {}/{}\n", count, m_pos, m_pos + count, (m_pos + count >= m_buf_len ? (m_pos + count) - m_buf_len : m_pos), m_len, m_len - count);
 		m_pos += count;
 		m_len -= count;
-		if (m_pos >= m_buf_len) {
-			m_pos -= m_buf_len;
+		if (m_pos >= map_len()) {
+			m_pos -= map_len();
 		}
 	}
 	void set_appended(uint64_t count) noexcept{
@@ -109,7 +120,7 @@ using CircBufShPtr = std::shared_ptr<CircularBuffer>;
   @param buf_len the capacity of the buffer; in other words, the length of the snake before it eats
   its tail. MUST BE a multiple of the page size.
  */
-std::expected<CircBufUqPtr,std::string> init_circ_buffer(const size_t buf_len);
+std::expected<CircBufUqPtr,std::string> init_circ_buffer(const PageCount map_pgs);
 
 } // end namespace mg7x
 #endif // ifndef __mg7x_CircularBuffer__H__

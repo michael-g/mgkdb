@@ -12,21 +12,6 @@
  * You should have received a copy of the GNU Affero Public License along with The
  * Library. If not, see https://www.gnu.org/licenses/agpl.txt.
  */
-/*
-This file is part of the Mg KDB-IPC C++ Library (hereinafter "The Library").
-
-The Library is free software: you can redistribute it and/or modify it under
-the terms of the GNU Affero Public License as published by the Free Software
-Foundation, either version 3 of the License, or (at your option) any later
-version.
-
-The Library is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE. See the GNU Affero Public License for more details.
-
-You should have received a copy of the GNU Affero Public License along with The
-Library. If not, see https://www.gnu.org/licenses/agpl.txt.
-*/
 
 #ifndef __mg_coro_task__H__
 #define __mg_coro_task__H__
@@ -78,7 +63,7 @@ struct SuspendNever
 
 // Vary this value if you want to use the `cppcoro/task.hpp` Task implementation instead.
 // You'll need to update the `src/CMakeLists.txt` include-path and cppcoro library locations
-#if 0
+#if 1
 
 namespace mg7x {
 
@@ -109,17 +94,9 @@ public:
 				return false;
 			}
 			// See https://stackoverflow.com/q/78399968/322304 for discussion of different return types
-			std::coroutine_handle<> await_suspend(std::coroutine_handle<Promise> h) {
-				if (ResultType::EXCEPTION == h.promise().p_result_type) {
-					WRN_PRINT(MAG "Task" RST "::" YEL "Promise" RST "::" RED "FinalAwaiter" RST "::await_suspend; rethrowing exception");
-					std::rethrow_exception(h.promise().p_exception);
-				}
-				if (nullptr != h.promise().p_cont) {
-					TRA_PRINT(MAG "Task" RST "::" YEL "Promise" RST "::" RED "FinalAwaiter" RST "::await_suspend; h ? {}, h.done? {}, h.address {}, h.promise.p_cont.address {}", !!h, h && h.done(), h.address(), h.promise().p_cont.address());
-					return h.promise().p_cont;
-				}
-				WRN_PRINT(MAG "Task" RST "::" YEL "Promise" RST "::" RED "FinalAwaiter" RST "::await_suspend; NULL continuation, throwing protective exception; perhaps an exception should be raised instead of co_returning?");
-				throw BrokenPromise{};
+			std::coroutine_handle<> await_suspend(std::coroutine_handle<Promise> h) noexcept {
+        TRA_PRINT(MAG "Task" RST "::" YEL "Promise" RST "::" RED "FinalAwaiter" RST "::await_suspend; h ? {}, h.done? {}, h.address {}, h.promise.p_cont.address {}", !!h, h && h.done(), h.address(), h.promise().p_cont.address());
+        return h.promise().p_cont;
 			}
 			void await_resume() const noexcept {
 				TRA_PRINT(MAG "Task" RST "::" YEL "Promise" RST "::" RED "FinalAwaiter" RST "::await_resume; nop");

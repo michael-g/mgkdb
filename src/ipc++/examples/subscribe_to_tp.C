@@ -60,7 +60,7 @@ int main(void)
 	// the buffer and by using this variant we won't ever have to do a "compact" operation.
 	// I've sized it quite generously.
 	// The init-function returns std::expected<std::unique_ptr<CircularBuffer>,std::string>
-	auto buf_res = init_circ_buffer(4 * 4096);
+	auto buf_res = init_circ_buffer(PageCount{4u});
 	if (!buf_res) {
 		std::print("ERROR: {}\n", buf_res.error());
 		exit(EXIT_FAILURE);

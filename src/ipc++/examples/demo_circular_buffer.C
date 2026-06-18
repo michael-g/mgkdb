@@ -56,8 +56,8 @@ int main(void)
 
 	KdbIpcMessageWriter writer{KdbMsgType::SYNC, cmd};
 
-	// std::expected<CircBufPtr,std::string>
-	auto circ_buf_res =  init_circ_buffer(4096);
+	// returns std::expected<CircBufPtr,std::string>
+	auto circ_buf_res =  init_circ_buffer(PageCount{1u});
 	if (!circ_buf_res) {
 		std::print("ERROR: while creating circular buffer: {}", circ_buf_res.error());
 		return EXIT_FAILURE;

@@ -87,6 +87,7 @@ public:
   D base_ptr() const noexcept { return m_addr.as_ptr<D>(); }
   Address base_addr() const noexcept { return m_addr; }
   Address end_addr() const noexcept { return m_addr.is_nil() ? Address{} : (m_addr + m_pages.bytes64()); }
+  Address addr_at(Extent off) const noexcept { return m_addr + off; }
   PageCount page_count() const noexcept { return m_pages; }
   Extent extent() const noexcept { return m_pages.bytes64(); }
   int unmap() noexcept;

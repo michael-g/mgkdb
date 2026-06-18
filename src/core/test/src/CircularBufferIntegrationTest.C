@@ -24,8 +24,9 @@ namespace mg7x::test {
 
 TEST(CircularBufferIntegrationTest, TestBasicCircBufferOps)
 {
-  const size_t BUF_LEN = 4096;
-  auto maybe_buf = mg7x::init_circ_buffer(BUF_LEN);
+  const PageCount MAP_PGS{1u};
+  const uint64_t BUF_LEN = MAP_PGS.bytes64();
+  auto maybe_buf = mg7x::init_circ_buffer(MAP_PGS);
   if (!maybe_buf) {
     FAIL() << "in mg7x::init_circ_buffer: " << maybe_buf.error();
   }

@@ -66,8 +66,9 @@ struct MemFdCleanup
 
 };
 
-std::expected<CircBufUqPtr,std::string> init_circ_buffer(const size_t buf_len)
+std::expected<CircBufUqPtr,std::string> init_circ_buffer(const PageCount map_pgs)
 {
+  uint64_t buf_len = map_pgs.bytes64();
 	std::expected<void*,int> res_map = io::mmap(nullptr, 2 * buf_len, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
 	if (!res_map) {
 		return std::unexpected(std::format("Failed to reserve private address range: {}", strerror(res_map.error())));
@@ -117,7 +118,7 @@ std::expected<CircBufUqPtr,std::string> init_circ_buffer(const size_t buf_len)
 	root_cleaner.disarm();
 	mfd_closer.disarm();
 
-	return std::make_unique<CircularBuffer>(base, buf_len, mfd);
+	return std::make_unique<CircularBuffer>(Address{base}, PageCount::from_bytes(buf_len * 2), mfd);
 }
 
 } // end namespace mg7x

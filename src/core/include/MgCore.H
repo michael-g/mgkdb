@@ -20,6 +20,7 @@
 #include <string.h> // memcpy
 
 #include <type_traits>
+#include <bit>
 
 #define MG_PACKED __attribute__((packed))
 
@@ -34,38 +35,33 @@ constexpr uint64_t PAGE_SIZE_64 = PAGE_SIZE_32;
 constexpr uint64_t PAGE_SIZE = PAGE_SIZE_64;
 
 template<typename Z>
-static inline
-bool is_aligned(Z val, Z align)
+constexpr bool is_aligned(Z val, Z align) noexcept
 {
   return 0 == (val & (static_cast<Z>(align) - 1));
 }
 
 template<typename Z>
-static inline
-bool is_page_aligned(Z val)
+constexpr bool is_page_aligned(Z val) noexcept
 {
   return is_aligned<Z>(val, PAGE_SIZE_64);
 }
 
 constexpr
-static bool is_power_of_two(uint64_t val)
+static bool is_power_of_two(uint64_t val) noexcept
 {
-  return val && !(val & (val - 1));
+  return std::has_single_bit(val);
+  // return val && !(val & (val - 1));
 }
 
 template<typename D, typename S>
-static inline D ptr_cvt(S src)
+constexpr D ptr_cvt(S src) noexcept
 {
   static_assert(sizeof(D) == sizeof(S));
-  D dst;
-  S _src = src;
-  memcpy(&dst, &_src, sizeof(D));
-  return dst;
+  return std::bit_cast<D>(src);
 }
 
 template<uint64_t Z>
-static inline
-constexpr uint64_t align_up(uint64_t value)
+constexpr uint64_t align_up(uint64_t value) noexcept
 {
   value += Z - 1;
   value &= ~(Z - 1);
@@ -73,8 +69,7 @@ constexpr uint64_t align_up(uint64_t value)
 }
 
 template<uint64_t Z>
-static inline
-constexpr uint64_t align_to_next_mltpl(uint64_t value)
+constexpr uint64_t align_to_next_mltpl(uint64_t value) noexcept
 {
   value += Z;
   value &= ~(Z - 1);
@@ -85,9 +80,9 @@ class Extent
 {
   uint64_t m_size{0};
 public:
-  Extent() {}
+  Extent() = default;
   template<typename T>
-  Extent(T sz) noexcept { static_assert(!std::is_same_v<T,uint64_t>  && "Bad type"); }
+  Extent(T sz) noexcept { (void)sz; static_assert(!std::is_same_v<T,uint64_t>  && "Bad type"); }
   Extent(uint64_t sz) noexcept : m_size{sz} {}
 
   uint64_t ext64() const noexcept { return m_size; }

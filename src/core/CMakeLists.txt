@@ -151,6 +151,7 @@ target_link_libraries(MgCircBuf
     PUBLIC
         MgCore
         MgIoDefs
+        MgMapTypes
 )
 
 mg_cmake_install(LIB_NAME MgCircBuf FS_NAME mg_circ_buf_fs)

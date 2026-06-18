@@ -1,4 +1,6 @@
 
+list(APPEND CMAKE_PREFIX_PATH "$ENV{HOME}/alt")
+
 # To download, build and install cppcoro:
 # git clone --recursive git@github.com:andreasbuhr/cppcoro.git cppcoro
 # cd cppcoro
@@ -11,8 +13,7 @@ function(add_tpmux_props lib_name)
         PROPERTIES
             CMAKE_CXX_COMPILER "/usr/lib64/ccache/clang++"
             CMAKE_C_COMPILER "/usr/lib64/ccache/clang"
-            CMAKE_INSTALL_PREFIX "$HOME/alt"
-    )
+)
 endfunction()
 
 #----------------------------------------------------------------------
