@@ -20,8 +20,8 @@ set_property(TARGET Kx_CdotO
 add_subdirectory(core)
 add_subdirectory(kx_systems)
 add_subdirectory(ipc++)
+add_subdirectory(examples)
 add_subdirectory(krb5)
 add_subdirectory(log_filter)
-add_subdirectory(examples)
-# Under testing/dev
-add_subdirectory(tpmux)
+add_subdirectory(ring) # "research" project
+add_subdirectory(tpmux) # Under testing/dev
